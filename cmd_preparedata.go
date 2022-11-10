@@ -67,9 +67,9 @@ func (rt myTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	return rt.Base.RoundTrip(req)
 }
 
-func cmdPull() {
+func cmdPrepareData() {
 	switch {
-	case flagCredentials == "":
+	case flagCredentialsFile == "":
 		fmt.Fprintf(os.Stderr, "fatal: missing required flag --credentials-file\n")
 		os.Exit(1)
 	case flagSheetID == "":
@@ -83,7 +83,7 @@ func cmdPull() {
 		flagSheetName = "Sheet1"
 	}
 
-	config := loadServiceAccount(flagCredentials, sheets.SpreadsheetsReadonlyScope)
+	config := loadServiceAccount(flagCredentialsFile, sheets.SpreadsheetsReadonlyScope)
 
 	ctx := context.Background()
 	source := config.TokenSource(ctx)

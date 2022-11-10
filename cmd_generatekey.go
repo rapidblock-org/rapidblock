@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-func cmdGenerate() {
+func cmdGenerateKey() {
 	switch {
 	case flagPublicKeyFile == "":
 		fmt.Fprintf(os.Stderr, "error: missing required flag -p / --public-key-file\n")

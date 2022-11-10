@@ -89,5 +89,5 @@ func WriteKeySigFile(filePath string, data []byte, isPrivate bool) {
 	encoded := make([]byte, encodedLen, encodedLen+2)
 	base64.StdEncoding.Encode(encoded, data)
 	encoded = append(encoded, '\r', '\n')
-	WriteFile(filePath, data, isPrivate)
+	WriteFile(filePath, encoded, isPrivate)
 }
