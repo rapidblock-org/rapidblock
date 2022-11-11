@@ -9,15 +9,15 @@ import (
 func cmdVerify() {
 	switch {
 	case flagPublicKeyFile == "":
-		fmt.Fprintf(os.Stderr, "error: missing required flag -p / --public-key-file\n")
+		fmt.Fprintf(os.Stderr, "fatal: missing required flag -p / --public-key-file\n")
 		os.Exit(1)
 
 	case flagDataFile == "":
-		fmt.Fprintf(os.Stderr, "error: missing required flag -d / --data-file\n")
+		fmt.Fprintf(os.Stderr, "fatal: missing required flag -d / --data-file\n")
 		os.Exit(1)
 
 	case flagSigFile == "":
-		fmt.Fprintf(os.Stderr, "error: missing required flag -s / --signature-file\n")
+		fmt.Fprintf(os.Stderr, "fatal: missing required flag -s / --signature-file\n")
 		os.Exit(1)
 	}
 

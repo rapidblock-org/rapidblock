@@ -10,15 +10,17 @@ import (
 var Version = "devel"
 
 const (
-	PrepareData        = "prepare-data"
-	GenerateKey        = "generate-key"
-	Sign               = "sign"
-	Verify             = "verify"
-	AllModes           = PrepareData + ", " + GenerateKey + ", " + Sign + ", " + Verify
-	PrepareSignVerify  = PrepareData + ", " + Sign + ", " + Verify
-	GenerateSignVerify = GenerateKey + ", " + Sign + ", " + Verify
-	GenerateSign       = GenerateKey + ", " + Sign
-	SignVerify         = Sign + ", " + Verify
+	PrepareData            = "prepare-data"
+	GenerateKey            = "generate-key"
+	Sign                   = "sign"
+	Verify                 = "verify"
+	Apply                  = "apply"
+	AllModes               = PrepareData + ", " + GenerateKey + ", " + Sign + ", " + Verify + ", " + Apply
+	PrepareSignVerifyApply = PrepareData + ", " + Sign + ", " + Verify + ", " + Apply
+	PrepareSignVerify      = PrepareData + ", " + Sign + ", " + Verify
+	GenerateSignVerify     = GenerateKey + ", " + Sign + ", " + Verify
+	GenerateSign           = GenerateKey + ", " + Sign
+	SignVerify             = Sign + ", " + Verify
 )
 
 var (
@@ -32,6 +34,7 @@ var (
 	flagSigFile         string
 	flagPublicKeyFile   string
 	flagPrivateKeyFile  string
+	flagDatabaseURL     string
 )
 
 func init() {
@@ -42,10 +45,11 @@ func init() {
 	getopt.FlagLong(&flagCredentialsFile, "credentials-file", 'K', "["+PrepareData+"] path to the JWT service account credentials")
 	getopt.FlagLong(&flagSheetID, "sheet-id", 'H', "["+PrepareData+"] ID of the Google Sheet spreadsheet to pull data from")
 	getopt.FlagLong(&flagSheetName, "sheet-name", 'N', "["+PrepareData+"] Name of the Google Sheet sheet to pull data from")
-	getopt.FlagLong(&flagDataFile, "data-file", 'd', "["+PrepareSignVerify+"] path to the payload file to create, sign, or verify")
+	getopt.FlagLong(&flagDataFile, "data-file", 'd', "["+PrepareSignVerifyApply+"] path to the payload file to create, sign, verify, or apply")
 	getopt.FlagLong(&flagSigFile, "signature-file", 's', "["+SignVerify+"] path to the base-64 Ed25519 signature file to create or verify")
 	getopt.FlagLong(&flagPublicKeyFile, "public-key-file", 'p', "["+GenerateSignVerify+"] path to the base-64 Ed25519 public key file to verify with")
 	getopt.FlagLong(&flagPrivateKeyFile, "private-key-file", 'k', "["+GenerateSign+"] path to the base-64 Ed25519 private key file to sign with")
+	getopt.FlagLong(&flagDatabaseURL, "database-url", 'D', "["+Apply+"] PostgreSQL database URL to connect to")
 }
 
 func main() {
@@ -65,8 +69,10 @@ func main() {
 		cmdSign()
 	case Verify:
 		cmdVerify()
+	case Apply:
+		cmdApply()
 	default:
-		fmt.Fprintf(os.Stderr, "error: unknown value %q for -m / --mode flag, expected one of: %s\n", flagMode, AllModes)
+		fmt.Fprintf(os.Stderr, "fatal: unknown value %q for -m / --mode flag, expected one of: %s\n", flagMode, AllModes)
 		os.Exit(1)
 	}
 }

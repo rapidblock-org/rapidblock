@@ -1,9 +1,7 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -70,13 +68,13 @@ func (rt myTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 func cmdPrepareData() {
 	switch {
 	case flagCredentialsFile == "":
-		fmt.Fprintf(os.Stderr, "fatal: missing required flag --credentials-file\n")
+		fmt.Fprintf(os.Stderr, "fatal: missing required flag -K / --credentials-file\n")
 		os.Exit(1)
 	case flagSheetID == "":
-		fmt.Fprintf(os.Stderr, "fatal: missing required flag --sheet-id\n")
+		fmt.Fprintf(os.Stderr, "fatal: missing required flag -H / --sheet-id\n")
 		os.Exit(1)
 	case flagDataFile == "":
-		fmt.Fprintf(os.Stderr, "fatal: missing required flag --data-file\n")
+		fmt.Fprintf(os.Stderr, "fatal: missing required flag -d / --data-file\n")
 		os.Exit(1)
 	}
 	if flagSheetName == "" {
@@ -141,21 +139,7 @@ func cmdPrepareData() {
 		}
 	}
 
-	var buf bytes.Buffer
-	e := json.NewEncoder(&buf)
-	e.SetIndent("", "  ")
-	e.SetEscapeHTML(false)
-	err = e.Encode(&file)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: failed encode BlockFile to JSON: %v\n", err)
-		os.Exit(1)
-	}
-
-	raw := buf.Bytes()
-	raw = bytes.TrimSpace(raw)
-	raw = bytes.ReplaceAll(raw, []byte{'\n'}, []byte{'\r', '\n'})
-	raw = append(raw, '\r', '\n')
-	WriteFile(flagDataFile, raw, false)
+	WriteJsonFile(flagDataFile, file, false)
 }
 
 func gsheetString(row []any, index int) string {

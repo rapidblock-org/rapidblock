@@ -10,19 +10,19 @@ import (
 func cmdSign() {
 	switch {
 	case flagPublicKeyFile == "":
-		fmt.Fprintf(os.Stderr, "error: missing required flag -p / --public-key-file\n")
+		fmt.Fprintf(os.Stderr, "fatal: missing required flag -p / --public-key-file\n")
 		os.Exit(1)
 
 	case flagPrivateKeyFile == "":
-		fmt.Fprintf(os.Stderr, "error: missing required flag -k / --private-key-file\n")
+		fmt.Fprintf(os.Stderr, "fatal: missing required flag -k / --private-key-file\n")
 		os.Exit(1)
 
 	case flagDataFile == "":
-		fmt.Fprintf(os.Stderr, "error: missing required flag -d / --data-file\n")
+		fmt.Fprintf(os.Stderr, "fatal: missing required flag -d / --data-file\n")
 		os.Exit(1)
 
 	case flagSigFile == "":
-		fmt.Fprintf(os.Stderr, "error: missing required flag -s / --signature-file\n")
+		fmt.Fprintf(os.Stderr, "fatal: missing required flag -s / --signature-file\n")
 		os.Exit(1)
 	}
 
@@ -32,7 +32,7 @@ func cmdSign() {
 	if !pubKey.Equal(computedPubKey) {
 		str0 := base64.StdEncoding.EncodeToString(computedPubKey[:])
 		str1 := base64.StdEncoding.EncodeToString(pubKey[:])
-		fmt.Fprintf(os.Stderr, "error: private key does not match public key!\n\tEd25519 public key calculated from private key: %s\n\tEd25519 public key provided: %s\n", str0, str1)
+		fmt.Fprintf(os.Stderr, "fatal: private key does not match public key!\n\tEd25519 public key calculated from private key: %s\n\tEd25519 public key provided: %s\n", str0, str1)
 	}
 
 	checksum := checksumFile(flagDataFile, flagText)

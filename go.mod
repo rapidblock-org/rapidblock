@@ -3,6 +3,7 @@ module github.com/chronos-tachyon/fediblock
 go 1.19
 
 require (
+	github.com/jackc/pgx/v5 v5.0.4
 	github.com/pborman/getopt/v2 v2.1.0
 	golang.org/x/net v0.2.0
 	golang.org/x/oauth2 v0.2.0
@@ -17,7 +18,10 @@ require (
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.2.0 // indirect
 	github.com/googleapis/gax-go/v2 v2.7.0 // indirect
+	github.com/jackc/pgpassfile v1.0.0 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20200714003250-2b9c44734f2b // indirect
 	go.opencensus.io v0.24.0 // indirect
+	golang.org/x/crypto v0.0.0-20220829220503-c86fa9a7ed90 // indirect
 	golang.org/x/sys v0.2.0 // indirect
 	golang.org/x/text v0.4.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect

@@ -15,7 +15,7 @@ var reSpace = regexp.MustCompile(`\s+`)
 func checksumFile(filePath string, isText bool) []byte {
 	file, err := os.OpenFile(filePath, os.O_RDONLY, 0)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: failed to open %q: %v\n", filePath, err)
+		fmt.Fprintf(os.Stderr, "fatal: failed to open %q: %v\n", filePath, err)
 		os.Exit(1)
 	}
 
@@ -32,7 +32,7 @@ func checksumFile(filePath string, isText bool) []byte {
 			isEOF = true
 		default:
 			_ = file.Close()
-			fmt.Fprintf(os.Stderr, "error: I/O error while reading %q: %v\n", filePath, err)
+			fmt.Fprintf(os.Stderr, "fatal: I/O error while reading %q: %v\n", filePath, err)
 			os.Exit(1)
 		}
 
@@ -59,7 +59,7 @@ func checksumFile(filePath string, isText bool) []byte {
 
 	err = file.Close()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: failed to close %q: %v\n", filePath, err)
+		fmt.Fprintf(os.Stderr, "fatal: failed to close %q: %v\n", filePath, err)
 		os.Exit(1)
 	}
 
