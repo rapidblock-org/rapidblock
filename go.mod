@@ -8,6 +8,7 @@ require (
 	golang.org/x/net v0.2.0
 	golang.org/x/oauth2 v0.2.0
 	google.golang.org/api v0.103.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -20,6 +21,8 @@ require (
 	github.com/googleapis/gax-go/v2 v2.7.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20200714003250-2b9c44734f2b // indirect
+	github.com/kr/text v0.2.0 // indirect
+	github.com/rogpeppe/go-internal v1.9.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	golang.org/x/crypto v0.0.0-20220829220503-c86fa9a7ed90 // indirect
 	golang.org/x/sys v0.2.0 // indirect
