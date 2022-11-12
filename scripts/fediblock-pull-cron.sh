@@ -1,10 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
-# Suggested crontab spec:
-#
-#   27 * * * * sleep $((RANDOM % 3600)) && /home/mastodon/fediblock-pull-cron.sh
-#
+if [ -z "${NOW:+isset}" ]; then
+  sleep $((RANDOM % 3600))
+fi
 
 readonly PUBLIC_KEY_FILE="/etc/fediblock/fediblock.pub"
 readonly POSTGRESQL_URL="postgresql:///mastodon?host=/run/postgresql&port=5433"
