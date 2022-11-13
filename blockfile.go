@@ -4,7 +4,7 @@ import (
 	"time"
 )
 
-const BlockFileSpecV1 = "https://chronos-tachyon.net/fediblock/spec/v1/"
+const BlockFileSpecV1 = "https://fediblock.online/spec/v1/"
 
 type BlockFile struct {
 	Spec        string               `json:"@spec"`

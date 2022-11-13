@@ -13,7 +13,7 @@ trap 'cd /; rm -rf "$tmproot"' EXIT
 
 cd "$tmproot"
 curl --remote-name-all -fsSLR \
-  https://chronos-tachyon.net/fediblock/blocklist.json \
-  https://chronos-tachyon.net/fediblock/blocklist.json.sig
+  https://fediblock.online/blocklist.json \
+  https://fediblock.online/blocklist.json.sig
 fediblock -m verify -p "$PUBLIC_KEY_FILE" -d blocklist.json -s blocklist.json.sig -t
 fediblock -m apply -d blocklist.json -D "$POSTGRESQL_URL"
