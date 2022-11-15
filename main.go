@@ -10,17 +10,17 @@ import (
 var Version = "devel"
 
 const (
-	PrepareData            = "prepare-data"
-	GenerateKey            = "generate-key"
-	Sign                   = "sign"
-	Verify                 = "verify"
-	Apply                  = "apply"
-	AllModes               = PrepareData + ", " + GenerateKey + ", " + Sign + ", " + Verify + ", " + Apply
-	PrepareSignVerifyApply = PrepareData + ", " + Sign + ", " + Verify + ", " + Apply
-	PrepareSignVerify      = PrepareData + ", " + Sign + ", " + Verify
-	GenerateSignVerify     = GenerateKey + ", " + Sign + ", " + Verify
-	GenerateSign           = GenerateKey + ", " + Sign
-	SignVerify             = Sign + ", " + Verify
+	PrepareData          = "prepare-data"
+	ExportCSV            = "export-csv"
+	GenerateKey          = "generate-key"
+	Sign                 = "sign"
+	Verify               = "verify"
+	Apply                = "apply"
+	AllModes             = PrepareData + ", " + ExportCSV + "," + GenerateKey + ", " + Sign + ", " + Verify + ", " + Apply
+	AllExceptGenerateKey = PrepareData + ", " + ExportCSV + "," + Sign + ", " + Verify + ", " + Apply
+	GenerateSignVerify   = GenerateKey + ", " + Sign + ", " + Verify
+	GenerateSign         = GenerateKey + ", " + Sign
+	SignVerify           = Sign + ", " + Verify
 )
 
 var (
@@ -30,6 +30,7 @@ var (
 	flagCredentialsFile string
 	flagSheetID         string
 	flagSheetName       string
+	flagCsvFile         string
 	flagDataFile        string
 	flagSigFile         string
 	flagPublicKeyFile   string
@@ -45,7 +46,8 @@ func init() {
 	getopt.FlagLong(&flagCredentialsFile, "credentials-file", 'K', "["+PrepareData+"] path to the JWT service account credentials")
 	getopt.FlagLong(&flagSheetID, "sheet-id", 'H', "["+PrepareData+"] ID of the Google Sheet spreadsheet to pull data from")
 	getopt.FlagLong(&flagSheetName, "sheet-name", 'N', "["+PrepareData+"] Name of the Google Sheet sheet to pull data from")
-	getopt.FlagLong(&flagDataFile, "data-file", 'd', "["+PrepareSignVerifyApply+"] path to the payload file to create, sign, verify, or apply")
+	getopt.FlagLong(&flagCsvFile, "csv-file", 'c', "["+ExportCSV+"] path to the CSV file to create")
+	getopt.FlagLong(&flagDataFile, "data-file", 'd', "["+AllExceptGenerateKey+"] path to the JSON file to create, export from, sign, verify, or apply")
 	getopt.FlagLong(&flagSigFile, "signature-file", 's', "["+SignVerify+"] path to the base-64 Ed25519 signature file to create or verify")
 	getopt.FlagLong(&flagPublicKeyFile, "public-key-file", 'p', "["+GenerateSignVerify+"] path to the base-64 Ed25519 public key file to verify with")
 	getopt.FlagLong(&flagPrivateKeyFile, "private-key-file", 'k', "["+GenerateSign+"] path to the base-64 Ed25519 private key file to sign with")
@@ -63,6 +65,8 @@ func main() {
 	switch flagMode {
 	case PrepareData:
 		cmdPrepareData()
+	case ExportCSV:
+		cmdExportCSV()
 	case GenerateKey:
 		cmdGenerateKey()
 	case Sign:
