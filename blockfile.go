@@ -17,14 +17,17 @@ type Block struct {
 	DateReported   time.Time `json:"dateReported"`
 	DateBlocked    time.Time `json:"dateBlocked"`
 	Reason         string    `json:"reason"`
-	ReceiptsURL    string    `json:"reciptsURL"`
-	IsRacism       bool      `json:"isRacism"`
-	IsAntisemitism bool      `json:"isAntisemitism"`
-	IsMisogyny     bool      `json:"isMisogyny"`
-	IsQueerphobia  bool      `json:"isQueerphobia"`
-	IsHarassment   bool      `json:"isHarassment"`
-	IsFraud        bool      `json:"isFraud"`
-	IsCopyright    bool      `json:"isCopyright"`
+	ReceiptsURL    string    `json:"reciptsURL,omitempty"`
+	IsRacism       bool      `json:"isRacism,omitempty"`
+	IsAntisemitism bool      `json:"isAntisemitism,omitempty"`
+	IsMisogyny     bool      `json:"isMisogyny,omitempty"`
+	IsQueerphobia  bool      `json:"isQueerphobia,omitempty"`
+	IsHarassment   bool      `json:"isHarassment,omitempty"`
+	IsFraud        bool      `json:"isFraud,omitempty"`
+	IsCopyright    bool      `json:"isCopyright,omitempty"`
+	IsSpam         bool      `json:"isSpam,omitempty"`
+	IsMalware      bool      `json:"isMalware,omitempty"`
+	IsCSAM         bool      `json:"isCSAM,omitempty"`
 }
 
 type PrivateBlock struct {

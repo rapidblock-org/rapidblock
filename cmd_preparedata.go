@@ -145,6 +145,9 @@ const (
 	isHarassmentColumn
 	isFraudColumn
 	isCopyrightColumn
+	isSpamColumn
+	isMalwareColumn
+	isCSAMColumn
 )
 
 type columnNameRule struct {
@@ -167,6 +170,9 @@ var columnNameRules = [...]columnNameRule{
 	{isHarassmentColumn, regexp.MustCompile(`^(?i)(?:is\s+)?harassment\??(?:\s+\([^()]*\))?$`)},
 	{isFraudColumn, regexp.MustCompile(`^(?i)(?:is\s+)?fraud\??(?:\s+\([^()]*\))?$`)},
 	{isCopyrightColumn, regexp.MustCompile(`^(?i)(?:is\s+)?copyright\??(?:\s+\([^()]*\))?$`)},
+	{isSpamColumn, regexp.MustCompile(`^(?i)(?:is\s+)?spam\??(?:\s+\([^()]*\))?$`)},
+	{isMalwareColumn, regexp.MustCompile(`^(?i)(?:is\s+)?malware\??(?:\s+\([^()]*\))?$`)},
+	{isCSAMColumn, regexp.MustCompile(`^(?i)(?:is\s+)?(?:csam|csa)\??(?:\s+\([^()]*\))?$`)},
 }
 
 func parseSchema(row []any) columnSchema {
@@ -221,6 +227,12 @@ func (cs columnSchema) parseRow(row []any) (block PrivateBlock, err error) {
 			err = gsheetBool(&block.Block.IsFraud, value, index)
 		case isCopyrightColumn:
 			err = gsheetBool(&block.Block.IsCopyright, value, index)
+		case isSpamColumn:
+			err = gsheetBool(&block.Block.IsSpam, value, index)
+		case isMalwareColumn:
+			err = gsheetBool(&block.Block.IsMalware, value, index)
+		case isCSAMColumn:
+			err = gsheetBool(&block.Block.IsCSAM, value, index)
 		}
 		if err != nil {
 			break
