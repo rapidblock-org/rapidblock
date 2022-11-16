@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -97,69 +98,164 @@ func cmdPrepareData() {
 		os.Exit(1)
 	}
 
-	sheetRange := flagSheetName + "!A2:L"
-	resp, err := srv.Spreadsheets.Values.Get(flagSheetID, sheetRange).Do()
+	resp, err := srv.Spreadsheets.Values.Get(flagSheetID, flagSheetName).Do()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "fatal: failed to read data from Google Sheets: %v\n", err)
 		os.Exit(1)
 	}
 
+	schema := parseSchema(resp.Values[0])
+
 	var file BlockFile
 	file.Spec = BlockFileSpecV1
 	file.PublishedAt = time.Now().UTC()
-	file.Blocks = make(map[string]BlockItem, len(resp.Values))
-	for _, row := range resp.Values {
-		instanceDomain := gsheetString(row, 0)
-		dateReported := gsheetDate(row, 1)
-		dateBlocked := gsheetDate(row, 2)
-		isBlocked := gsheetBool(row, 3)
-		isRacism := gsheetBool(row, 4)
-		isMisogyny := gsheetBool(row, 5)
-		isQueerphobia := gsheetBool(row, 6)
-		isHarassment := gsheetBool(row, 7)
-		isFraud := gsheetBool(row, 8)
-		reason := gsheetString(row, 9)
-		reportedBy := gsheetString(row, 10)
-		receiptsURL := gsheetURL(row, 11)
-
-		_ = reportedBy
-
-		if isBlocked {
-			file.Blocks[instanceDomain] = BlockItem{
-				DateReported:  dateReported,
-				DateBlocked:   dateBlocked,
-				IsRacism:      isRacism,
-				IsMisogyny:    isMisogyny,
-				IsQueerphobia: isQueerphobia,
-				IsHarassment:  isHarassment,
-				IsFraud:       isFraud,
-				Reason:        reason,
-				ReceiptsURL:   receiptsURL.String(),
-			}
+	file.Blocks = make(map[string]Block, len(resp.Values))
+	for _, row := range resp.Values[1:] {
+		block, err := schema.parseRow(row)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
+			os.Exit(1)
 		}
+		if !block.IsBlock {
+			continue
+		}
+		file.Blocks[block.Domain] = block.Block
 	}
 
 	WriteJsonFile(flagDataFile, file, false)
 }
 
-func gsheetString(row []any, index int) string {
-	value := row[index]
-	switch x := value.(type) {
+type columnSchema []columnID
+
+type columnID byte
+
+const (
+	ignoreColumn columnID = iota
+	instanceColumn
+	dateReportedColumn
+	dateBlockedColumn
+	reasonColumn
+	reporterColumn
+	receiptsColumn
+	isBlockColumn
+	isRacismColumn
+	isAntisemitismColumn
+	isMisogynyColumn
+	isQueerphobiaColumn
+	isHarassmentColumn
+	isFraudColumn
+	isCopyrightColumn
+)
+
+type columnNameRule struct {
+	ID      columnID
+	Pattern *regexp.Regexp
+}
+
+var columnNameRules = [...]columnNameRule{
+	{instanceColumn, regexp.MustCompile(`^(?i)instance(?:\s+\([^()]*\))?$`)},
+	{dateReportedColumn, regexp.MustCompile(`^(?i)date\s+reported(?:\s+\([^()]*\))?$`)},
+	{dateBlockedColumn, regexp.MustCompile(`^(?i)date\s+blocked(?:\s+\([^()]*\))?$`)},
+	{reasonColumn, regexp.MustCompile(`^(?i)reason(?:\s+\([^()]*\))?$`)},
+	{reporterColumn, regexp.MustCompile(`^(?i)reporter(?:\s+url)?(?:\s+\([^()]*\))?$`)},
+	{receiptsColumn, regexp.MustCompile(`^(?i)receipts(?:\s+url)?(?:\s+\([^()]*\))?$`)},
+	{isBlockColumn, regexp.MustCompile(`^(?i)(?:is\s+)?block\??(?:\s+\([^()]*\))?$`)},
+	{isRacismColumn, regexp.MustCompile(`^(?i)(?:is\s+)?racism\??(?:\s+\([^()]*\))?$`)},
+	{isAntisemitismColumn, regexp.MustCompile(`^(?i)(?:is\s+)?antisemitism\??(?:\s+\([^()]*\))?$`)},
+	{isMisogynyColumn, regexp.MustCompile(`^(?i)(?:is\s+)?misogyny\??(?:\s+\([^()]*\))?$`)},
+	{isQueerphobiaColumn, regexp.MustCompile(`^(?i)(?:is\s+)?queerphobia\??(?:\s+\([^()]*\))?$`)},
+	{isHarassmentColumn, regexp.MustCompile(`^(?i)(?:is\s+)?harassment\??(?:\s+\([^()]*\))?$`)},
+	{isFraudColumn, regexp.MustCompile(`^(?i)(?:is\s+)?fraud\??(?:\s+\([^()]*\))?$`)},
+	{isCopyrightColumn, regexp.MustCompile(`^(?i)(?:is\s+)?copyright\??(?:\s+\([^()]*\))?$`)},
+}
+
+func parseSchema(row []any) columnSchema {
+	cs := make(columnSchema, len(row))
+	for index, row := range row {
+		name := row.(string)
+		id := ignoreColumn
+		for _, rule := range columnNameRules {
+			if rule.Pattern.MatchString(name) {
+				id = rule.ID
+				break
+			}
+		}
+		cs[index] = id
+	}
+	return cs
+}
+
+func (cs columnSchema) parseRow(row []any) (block PrivateBlock, err error) {
+	for index, value := range row {
+		id := ignoreColumn
+		if index >= 0 && index < len(cs) {
+			id = cs[index]
+		}
+
+		switch id {
+		case instanceColumn:
+			err = gsheetString(&block.Domain, value, index)
+		case dateReportedColumn:
+			err = gsheetDate(&block.Block.DateReported, value, index)
+		case dateBlockedColumn:
+			err = gsheetDate(&block.Block.DateBlocked, value, index)
+		case reasonColumn:
+			err = gsheetString(&block.Block.Reason, value, index)
+		case reporterColumn:
+			err = gsheetURL(&block.Reporter, value, index)
+		case receiptsColumn:
+			err = gsheetURL(&block.Receipts, value, index)
+		case isBlockColumn:
+			err = gsheetBool(&block.IsBlock, value, index)
+		case isRacismColumn:
+			err = gsheetBool(&block.Block.IsRacism, value, index)
+		case isAntisemitismColumn:
+			err = gsheetBool(&block.Block.IsAntisemitism, value, index)
+		case isMisogynyColumn:
+			err = gsheetBool(&block.Block.IsMisogyny, value, index)
+		case isQueerphobiaColumn:
+			err = gsheetBool(&block.Block.IsQueerphobia, value, index)
+		case isHarassmentColumn:
+			err = gsheetBool(&block.Block.IsHarassment, value, index)
+		case isFraudColumn:
+			err = gsheetBool(&block.Block.IsFraud, value, index)
+		case isCopyrightColumn:
+			err = gsheetBool(&block.Block.IsCopyright, value, index)
+		}
+		if err != nil {
+			break
+		}
+	}
+	if block.Receipts != nil {
+		block.Block.ReceiptsURL = block.Receipts.String()
+	}
+	return block, err
+}
+
+func gsheetString(out *string, in any, index int) error {
+	switch x := in.(type) {
 	case string:
-		return x
+		x = strings.TrimSpace(x)
+		*out = x
+		return nil
 	default:
-		fmt.Fprintf(os.Stderr, "fatal: row[%d] has type %T, expected string\n", index, value)
-		os.Exit(1)
-		panic(nil)
+		return fmt.Errorf("row[%d] has type %T, expected string", index, in)
 	}
 }
 
-func gsheetDate(row []any, index int) time.Time {
-	value := row[index]
-	switch x := value.(type) {
+func gsheetDate(out *time.Time, in any, index int) error {
+	switch x := in.(type) {
+	case *time.Time:
+		*out = *x
+		return nil
 	case time.Time:
-		return x
+		*out = x
+		return nil
 	case string:
+		x = strings.TrimSpace(x)
+		if x == "" {
+			return nil
+		}
 		t, err := time.ParseInLocation("2006-01-02", x, time.UTC)
 		if err != nil {
 			t, err = time.Parse(time.RFC3339, x)
@@ -168,103 +264,111 @@ func gsheetDate(row []any, index int) time.Time {
 			t, err = time.Parse(time.RFC3339Nano, x)
 		}
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "fatal: failed to parse row[%d] = %q as time: %v\n", index, x, err)
-			os.Exit(1)
+			return fmt.Errorf("row[%d] = %q could not be parsed as a date/time: %v\n", index, x, err)
 		}
-		return t
+		*out = t
+		return nil
 	default:
-		fmt.Fprintf(os.Stderr, "fatal: row[%d] has type %T, expected time.Time or string\n", index, value)
-		os.Exit(1)
-		panic(nil)
+		return fmt.Errorf("row[%d] has type %T, expected time.Time or string", index, in)
 	}
 }
 
-func gsheetBool(row []any, index int) bool {
-	value := row[index]
-	switch x := value.(type) {
-	case bool:
-		return x
-	case int:
-		return x != 0
-	case int64:
-		return x != 0
-	case int32:
-		return x != 0
-	case int16:
-		return x != 0
-	case int8:
-		return x != 0
-	case uint:
-		return x != 0
-	case uintptr:
-		return x != 0
-	case uint64:
-		return x != 0
-	case uint32:
-		return x != 0
-	case uint16:
-		return x != 0
-	case uint8:
-		return x != 0
-	case string:
-		b, ok := parseBool(x)
-		if !ok {
-			fmt.Fprintf(os.Stderr, "fatal: failed to parse row[%d] = %q as bool\n", index, x)
-			os.Exit(1)
-		}
-		return b
-	default:
-		fmt.Fprintf(os.Stderr, "fatal: row[%d] has type %T, expected bool, int, or string\n", index, value)
-		os.Exit(1)
-		panic(nil)
-	}
-}
-
-func gsheetURL(row []any, index int) *url.URL {
-	value := row[index]
-	switch x := value.(type) {
+func gsheetURL(out **url.URL, in any, index int) error {
+	switch x := in.(type) {
 	case *url.URL:
-		return x
+		*out = x
+		return nil
 	case url.URL:
-		return &x
+		*out = &x
+		return nil
 	case string:
+		x = strings.TrimSpace(x)
+		if x == "" {
+			return nil
+		}
 		u, err := url.Parse(x)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "fatal: failed to parse row[%d] = %q as URL: %v\n", index, x, err)
-			os.Exit(1)
+			return fmt.Errorf("row[%d] = %q could not be parsed as a URL: %v\n", index, x, err)
 		}
-		return u
+		*out = u
+		return nil
 	default:
-		fmt.Fprintf(os.Stderr, "fatal: row[%d] has type %T, expected *url.URL or string\n", index, value)
-		os.Exit(1)
-		panic(nil)
+		return fmt.Errorf("row[%d] has type %T, expected *url.URL or string", index, in)
 	}
 }
 
-func parseBool(str string) (value bool, ok bool) {
-	str = strings.ToLower(str)
-	switch str {
-	case "0":
-		return false, true
-	case "n":
-		return false, true
-	case "no":
-		return false, true
-	case "f":
-		return false, true
-	case "false":
-		return false, true
-	case "1":
-		return true, true
-	case "y":
-		return true, true
-	case "yes":
-		return true, true
-	case "t":
-		return true, true
-	case "true":
-		return true, true
+func gsheetBool(out *bool, in any, index int) error {
+	switch x := in.(type) {
+	case bool:
+		*out = x
+		return nil
+	case int:
+		*out = (x != 0)
+		return nil
+	case int64:
+		*out = (x != 0)
+		return nil
+	case int32:
+		*out = (x != 0)
+		return nil
+	case int16:
+		*out = (x != 0)
+		return nil
+	case int8:
+		*out = (x != 0)
+		return nil
+	case uint:
+		*out = (x != 0)
+		return nil
+	case uintptr:
+		*out = (x != 0)
+		return nil
+	case uint64:
+		*out = (x != 0)
+		return nil
+	case uint32:
+		*out = (x != 0)
+		return nil
+	case uint16:
+		*out = (x != 0)
+		return nil
+	case uint8:
+		*out = (x != 0)
+		return nil
+	case string:
+		x = strings.TrimSpace(x)
+		if x == "" {
+			return nil
+		}
+		switch strings.ToLower(x) {
+		case "0":
+			fallthrough
+		case "n":
+			fallthrough
+		case "no":
+			fallthrough
+		case "f":
+			fallthrough
+		case "false":
+			*out = false
+			return nil
+
+		case "1":
+			fallthrough
+		case "y":
+			fallthrough
+		case "yes":
+			fallthrough
+		case "t":
+			fallthrough
+		case "true":
+			*out = true
+			return nil
+
+		default:
+			return fmt.Errorf("row[%d] = %q could not be parsed as a bool", index, x)
+		}
 	default:
-		return false, false
+		return fmt.Errorf("row[%d] has type %T, expected bool, int, or string", index, in)
 	}
 }
