@@ -238,9 +238,6 @@ func (cs columnSchema) parseRow(row []any) (block PrivateBlock, err error) {
 			break
 		}
 	}
-	if block.Receipts != nil {
-		block.Block.ReceiptsURL = block.Receipts.String()
-	}
 	return block, err
 }
 

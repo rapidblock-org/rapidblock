@@ -17,7 +17,6 @@ type Block struct {
 	DateReported   time.Time `json:"dateReported"`
 	DateBlocked    time.Time `json:"dateBlocked"`
 	Reason         string    `json:"reason"`
-	ReceiptsURL    string    `json:"reciptsURL,omitempty"`
 	IsRacism       bool      `json:"isRacism,omitempty"`
 	IsAntisemitism bool      `json:"isAntisemitism,omitempty"`
 	IsMisogyny     bool      `json:"isMisogyny,omitempty"`
