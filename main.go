@@ -27,9 +27,8 @@ var (
 	flagVersion         bool
 	flagText            bool
 	flagMode            string
-	flagCredentialsFile string
-	flagSheetID         string
-	flagSheetName       string
+	flagAccountDataFile string
+	flagSourceID        string
 	flagCsvFile         string
 	flagDataFile        string
 	flagSigFile         string
@@ -43,9 +42,8 @@ func init() {
 	getopt.FlagLong(&flagVersion, "version", 'V', "show version information and exit")
 	getopt.FlagLong(&flagText, "text", 't', "["+SignVerify+"] perform newline canonicalization, under the assumption that --data-file is text")
 	getopt.FlagLong(&flagMode, "mode", 'm', "select mode of operation: "+AllModes)
-	getopt.FlagLong(&flagCredentialsFile, "credentials-file", 'K', "["+PrepareData+"] path to the JWT service account credentials")
-	getopt.FlagLong(&flagSheetID, "sheet-id", 'H', "["+PrepareData+"] ID of the Google Sheet spreadsheet to pull data from")
-	getopt.FlagLong(&flagSheetName, "sheet-name", 'N', "["+PrepareData+"] Name of the Google Sheet sheet to pull data from")
+	getopt.FlagLong(&flagAccountDataFile, "account-data-file", 'A', "["+PrepareData+"] path to the groups.io cookies and database column mappings")
+	getopt.FlagLong(&flagSourceID, "source-id", 'S', "["+PrepareData+"] ID of the Google Sheet spreadsheet to pull data from")
 	getopt.FlagLong(&flagCsvFile, "csv-file", 'c', "["+ExportCSV+"] path to the CSV file to create")
 	getopt.FlagLong(&flagDataFile, "data-file", 'd', "["+AllExceptGenerateKey+"] path to the JSON file to create, export from, sign, verify, or apply")
 	getopt.FlagLong(&flagSigFile, "signature-file", 's', "["+SignVerify+"] path to the base-64 Ed25519 signature file to create or verify")
