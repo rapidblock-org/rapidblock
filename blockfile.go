@@ -5,7 +5,7 @@ import (
 )
 
 const (
-	BlockFileSpecV1 = "https://fediblock.online/spec/v1/"
+	BlockFileSpecV1 = "https://rapidblock.org/spec/v1/"
 )
 
 type BlockFile struct {

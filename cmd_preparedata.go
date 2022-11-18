@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-const UserAgentFormat = "FediBlock/%s (+https://github.com/chronos-tachyon/fediblock/)"
+const UserAgentFormat = "RapidBlock/%s (+https://github.com/chronos-tachyon/rapidblock/)"
 
 type AccountData struct {
 	Cookies map[string]string  `json:"cookies"`

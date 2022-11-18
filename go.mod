@@ -1,4 +1,4 @@
-module github.com/chronos-tachyon/fediblock
+module github.com/chronos-tachyon/rapidblock
 
 go 1.19
 

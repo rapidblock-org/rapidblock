@@ -88,7 +88,7 @@ func cmdApply() {
 	argsDomainBlock[3] = 1
 	argsDomainBlock[4] = true
 	argsDomainBlock[5] = true
-	argsDomainBlock[6] = "FediBlock"
+	argsDomainBlock[6] = "RapidBlock"
 	argsDomainBlock[8] = false
 
 	argsAuditLog := make([]any, 7)
@@ -151,7 +151,7 @@ func cmdApply() {
 	yamlBoolTrue := makeLiteral("!!bool", "true")
 	yamlStringEtcUTC := makeString("Etc/UTC")
 	yamlStringSuspend := makeString("suspend")
-	yamlStringFediBlock := makeString("FediBlock")
+	yamlStringRapidBlock := makeString("RapidBlock")
 
 	yamlIntIDValue := makeLiteral("!!int", "%$#!@ REPLACE ME")
 	yamlStringDomainValue := makeString("%$#!@ REPLACE ME")
@@ -192,7 +192,7 @@ func cmdApply() {
 		yamlKeyRejectReports,
 		yamlBoolTrue,
 		yamlKeyPrivateComment,
-		yamlStringFediBlock,
+		yamlStringRapidBlock,
 		yamlKeyPublicComment,
 		yamlStringPublicCommentValue,
 		yamlKeyObfuscate,
