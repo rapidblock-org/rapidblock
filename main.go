@@ -10,23 +10,30 @@ import (
 var Version = "devel"
 
 const (
-	PrepareData          = "prepare-data"
-	ExportCSV            = "export-csv"
-	GenerateKey          = "generate-key"
-	Sign                 = "sign"
-	Verify               = "verify"
-	Apply                = "apply"
+	PrepareData = "prepare-data"
+	ExportCSV   = "export-csv"
+	GenerateKey = "generate-key"
+	Sign        = "sign"
+	Verify      = "verify"
+	Apply       = "apply"
+
 	AllModes             = PrepareData + ", " + ExportCSV + "," + GenerateKey + ", " + Sign + ", " + Verify + ", " + Apply
 	AllExceptGenerateKey = PrepareData + ", " + ExportCSV + "," + Sign + ", " + Verify + ", " + Apply
 	GenerateSignVerify   = GenerateKey + ", " + Sign + ", " + Verify
 	GenerateSign         = GenerateKey + ", " + Sign
 	SignVerify           = Sign + ", " + Verify
+
+	Mastodon3x = "mastodon-3.x"
+	Mastodon4x = "mastodon-4.x"
+
+	AllSoftware = Mastodon4x + ", " + Mastodon3x
 )
 
 var (
 	flagVersion         bool
 	flagText            bool
 	flagMode            string
+	flagSoftware        string
 	flagAccountDataFile string
 	flagSourceID        string
 	flagCsvFile         string
@@ -42,6 +49,7 @@ func init() {
 	getopt.FlagLong(&flagVersion, "version", 'V', "show version information and exit")
 	getopt.FlagLong(&flagText, "text", 't', "["+SignVerify+"] perform newline canonicalization, under the assumption that --data-file is text")
 	getopt.FlagLong(&flagMode, "mode", 'm', "select mode of operation: "+AllModes)
+	getopt.FlagLong(&flagSoftware, "software", 'x', "["+Apply+"] select which server software is in use: "+AllSoftware)
 	getopt.FlagLong(&flagAccountDataFile, "account-data-file", 'A', "["+PrepareData+"] path to the groups.io cookies and database column mappings")
 	getopt.FlagLong(&flagSourceID, "source-id", 'S', "["+PrepareData+"] ID of the Google Sheet spreadsheet to pull data from")
 	getopt.FlagLong(&flagCsvFile, "csv-file", 'c', "["+ExportCSV+"] path to the CSV file to create")

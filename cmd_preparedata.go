@@ -95,7 +95,6 @@ func cmdPrepareData() {
 			var block Block
 			var domain string
 			var hasDomain bool
-			var isBlocked bool
 
 			for _, value := range row.Values {
 				columnData := ad.Columns[value.ID]
@@ -104,7 +103,7 @@ func cmdPrepareData() {
 					domain = value.AsString()
 					hasDomain = true
 				case IsBlockedID:
-					isBlocked = value.AsBool()
+					block.IsBlocked = value.AsBool()
 				case DateRequestedID:
 					block.DateRequested = value.AsTime()
 				case DateDecidedID:
@@ -116,7 +115,7 @@ func cmdPrepareData() {
 				}
 			}
 
-			if hasDomain && isBlocked && !block.DateDecided.After(file.PublishedAt) {
+			if hasDomain && !block.DateDecided.IsZero() && !block.DateDecided.After(file.PublishedAt) {
 				file.Blocks[domain] = block
 			}
 			return nil

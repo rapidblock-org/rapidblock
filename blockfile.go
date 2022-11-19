@@ -15,6 +15,7 @@ type BlockFile struct {
 }
 
 type Block struct {
+	IsBlocked     bool      `json:"isBlocked"`
 	Reason        string    `json:"reason"`
 	Tags          []string  `json:"tags"`
 	DateRequested time.Time `json:"dateRequested"`
