@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -198,7 +198,7 @@ func GIOForEach[T any](
 			return fmt.Errorf("%s: %s: request failed: %w", http.MethodGet, urlstr, err)
 		}
 
-		rawBody, err := ioutil.ReadAll(resp.Body)
+		rawBody, err := io.ReadAll(resp.Body)
 		if err != nil {
 			_ = resp.Body.Close()
 			return fmt.Errorf("%s: %s: I/O error in response body: %w", http.MethodGet, urlstr, err)

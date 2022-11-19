@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/csv"
 	"fmt"
 	"os"
@@ -30,12 +29,23 @@ func cmdExportCSV() {
 	}
 	sort.Sort(firstColumnDomainNameSort(rows))
 
-	var buf bytes.Buffer
-	w := csv.NewWriter(&buf)
+	gBuffer.Reset()
+	w := csv.NewWriter(&gBuffer)
 	w.UseCRLF = true
-	w.WriteAll(rows)
-	w.Flush()
-	WriteFile(flagCsvFile, buf.Bytes(), false)
+
+	err := w.WriteAll(rows)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fatal: %q: failed to convert data to CSV: %v\n", flagCsvFile, err)
+		os.Exit(1)
+	}
+
+	err = w.Error()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fatal: %q: failed to convert data to CSV: %v\n", flagCsvFile, err)
+		os.Exit(1)
+	}
+
+	WriteFile(flagCsvFile, gBuffer.Bytes(), false)
 }
 
 type firstColumnDomainNameSort [][]string

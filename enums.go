@@ -6,7 +6,8 @@ import (
 	"strings"
 )
 
-type EnumData struct {
+type EnumData[T any] struct {
+	Value   T
 	GoName  string
 	Name    string
 	Aliases []string
@@ -26,19 +27,19 @@ const (
 	TagsID
 )
 
-var columnIDDataArray = [...]EnumData{
-	{"IgnoreID", "ignore", nil},
-	{"DomainID", "domain", []string{"instance"}},
-	{"DateRequestedID", "date_requested", nil},
-	{"DateDecidedID", "date_decided", nil},
-	{"RequesterID", "requester", nil},
-	{"ReceiptsID", "receipts", nil},
-	{"IsBlockedID", "is_blocked", nil},
-	{"ReasonID", "reason", nil},
-	{"TagsID", "tags", nil},
+var columnIDDataArray = [...]EnumData[ColumnID]{
+	{IgnoreID, "IgnoreID", "ignore", nil},
+	{DomainID, "DomainID", "domain", []string{"instance"}},
+	{DateRequestedID, "DateRequestedID", "date_requested", nil},
+	{DateDecidedID, "DateDecidedID", "date_decided", nil},
+	{RequesterID, "RequesterID", "requester", nil},
+	{ReceiptsID, "ReceiptsID", "receipts", nil},
+	{IsBlockedID, "IsBlockedID", "is_blocked", nil},
+	{ReasonID, "ReasonID", "reason", nil},
+	{TagsID, "TagsID", "tags", nil},
 }
 
-func (enum ColumnID) Data() EnumData {
+func (enum ColumnID) Data() EnumData[ColumnID] {
 	i := uint(enum)
 	j := uint(len(columnIDDataArray))
 	if i < j {
@@ -46,7 +47,7 @@ func (enum ColumnID) Data() EnumData {
 	}
 	goName := fmt.Sprintf("ColumnID(%d)", i)
 	name := fmt.Sprintf("column-id-%d", i)
-	return EnumData{goName, name, nil}
+	return EnumData[ColumnID]{enum, goName, name, nil}
 }
 
 func (enum ColumnID) GoString() string {
@@ -64,15 +65,14 @@ func (enum ColumnID) MarshalText() ([]byte, error) {
 
 func (enum *ColumnID) UnmarshalText(raw []byte) error {
 	str := string(raw)
-	for index := uint(0); index < uint(len(columnIDDataArray)); index++ {
-		data := columnIDDataArray[index]
+	for _, data := range columnIDDataArray {
 		if strings.EqualFold(str, data.Name) {
-			*enum = ColumnID(index)
+			*enum = data.Value
 			return nil
 		}
 		for _, alias := range data.Aliases {
 			if strings.EqualFold(str, alias) {
-				*enum = ColumnID(index)
+				*enum = data.Value
 				return nil
 			}
 		}
@@ -103,22 +103,22 @@ const (
 	AddressType
 )
 
-var gioColumnTypeDataArray = [...]EnumData{
-	{"UnknownType", "unknown", nil},
-	{"TextType", "text", nil},
-	{"ParagraphType", "paragraph", nil},
-	{"HTMLParagraphType", "html_paragraph", nil},
-	{"CheckboxType", "checkbox", nil},
-	{"MultipleChoiceType", "multiple_choice", []string{"multi_choice"}},
-	{"NumberType", "number", nil},
-	{"DateType", "date", nil},
-	{"TimeType", "time", nil},
-	{"LinkType", "link", nil},
-	{"ImageType", "image", nil},
-	{"AddressType", "address", nil},
+var gioColumnTypeDataArray = [...]EnumData[GIOType]{
+	{UnknownType, "UnknownType", "unknown", nil},
+	{TextType, "TextType", "text", nil},
+	{ParagraphType, "ParagraphType", "paragraph", nil},
+	{HTMLParagraphType, "HTMLParagraphType", "html_paragraph", nil},
+	{CheckboxType, "CheckboxType", "checkbox", nil},
+	{MultipleChoiceType, "MultipleChoiceType", "multiple_choice", []string{"multi_choice"}},
+	{NumberType, "NumberType", "number", nil},
+	{DateType, "DateType", "date", nil},
+	{TimeType, "TimeType", "time", nil},
+	{LinkType, "LinkType", "link", nil},
+	{ImageType, "ImageType", "image", nil},
+	{AddressType, "AddressType", "address", nil},
 }
 
-func (enum GIOType) Data() EnumData {
+func (enum GIOType) Data() EnumData[GIOType] {
 	i := uint(enum)
 	j := uint(len(gioColumnTypeDataArray))
 	if i < j {
@@ -126,7 +126,7 @@ func (enum GIOType) Data() EnumData {
 	}
 	goName := fmt.Sprintf("GIOType(%d)", i)
 	name := fmt.Sprintf("type-%d", i)
-	return EnumData{goName, name, nil}
+	return EnumData[GIOType]{enum, goName, name, nil}
 }
 
 func (enum GIOType) GoString() string {
@@ -144,15 +144,14 @@ func (enum GIOType) MarshalText() ([]byte, error) {
 
 func (enum *GIOType) UnmarshalText(raw []byte) error {
 	str := string(raw)
-	for index := uint(0); index < uint(len(gioColumnTypeDataArray)); index++ {
-		data := gioColumnTypeDataArray[index]
+	for _, data := range gioColumnTypeDataArray {
 		if strings.EqualFold(str, data.Name) {
-			*enum = GIOType(index)
+			*enum = data.Value
 			return nil
 		}
 		for _, alias := range data.Aliases {
 			if strings.EqualFold(str, alias) {
-				*enum = GIOType(index)
+				*enum = data.Value
 				return nil
 			}
 		}

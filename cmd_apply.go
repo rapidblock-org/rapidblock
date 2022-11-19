@@ -9,13 +9,64 @@ import (
 	pgx "github.com/jackc/pgx/v5"
 )
 
-const RubyTimeFormat = "2006-01-02 15:04:05.000000000 Z07:00"
-
 const (
-	SeveritySilence = 0
-	SeveritySuspend = 1
-	SeverityNoOp    = 2
+	SeveritySilence         = 0
+	SeveritySuspend         = 1
+	SeverityNoOp            = 2
+	ServerAccountID         = -99
+	ActionCreate            = "create"
+	ActionUpdate            = "update"
+	ActionDestroy           = "destroy"
+	TargetTypeDomainBlock   = "DomainBlock"
+	WellKnownPrivateComment = "RapidBlock"
+	RubyTimeFormat          = "2006-01-02 15:04:05.000000000 Z07:00"
 )
+
+const SQLSelectDomainBlocks = `
+SELECT
+	id, domain, private_comment, public_comment, created_at, updated_at, severity, reject_media, reject_reports, obfuscate
+FROM public.domain_blocks
+`
+
+const SQLInsertDomainBlocks = `
+INSERT INTO public.domain_blocks
+	(domain, private_comment, public_comment, created_at, updated_at, severity, reject_media, reject_reports, obfuscate)
+VALUES
+	($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id
+`
+
+const SQLUpdateDomainBlocksMastodon = `
+UPDATE public.domain_blocks
+SET
+	private_comment = $2,
+	public_comment = $3,
+	updated_at = $4,
+	severity = $5,
+	reject_media = $6,
+	reject_reports = $7,
+	obfuscate = $8
+WHERE
+	id = $1
+`
+
+const SQLDeleteDomainBlocksMastodon = `
+DELETE FROM public.domain_blocks WHERE id = $1
+`
+
+const SQLInsertAdminActionLogMastodon3x = `
+INSERT INTO public.admin_action_logs
+	(created_at, updated_at, account_id, action, target_type, target_id, recorded_changes)
+VALUES
+	($1, $2, $3, $4, $5, $6, $7)
+`
+
+const SQLInsertAdminActionLogMastodon4x = `
+INSERT INTO public.admin_action_logs
+	(created_at, updated_at, account_id, action, target_type, target_id, human_identifier, route_param, permalink)
+VALUES
+	($1, $2, $3, $4, $5, $6, $7, $8, $9)
+`
 
 func cmdApply() {
 	switch {
@@ -71,7 +122,9 @@ func ApplyMastodon(ctx context.Context, file BlockFile) (insertCount int, update
 		fmt.Fprintf(os.Stderr, "fatal: failed to Begin transaction: %v\n", err)
 		os.Exit(1)
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
 
 	existingBlocks := GetMastodonDomainBlocks(ctx, tx)
 	now := time.Now().UTC()
@@ -81,7 +134,7 @@ func ApplyMastodon(ctx context.Context, file BlockFile) (insertCount int, update
 		existing, hasExisting := existingBlocks[domain]
 
 		// If an admin has made a local decision for this domain, leave it alone.
-		if hasExisting && existing.PrivateComment != "RapidBlock" {
+		if hasExisting && existing.PrivateComment != WellKnownPrivateComment {
 			continue
 		}
 
@@ -108,7 +161,7 @@ func ApplyMastodon(ctx context.Context, file BlockFile) (insertCount int, update
 		case block.IsBlocked:
 			var inserted MastodonDomainBlock
 			inserted.Domain = domain
-			inserted.PrivateComment = "RapidBlock"
+			inserted.PrivateComment = WellKnownPrivateComment
 			inserted.PublicComment = block.Reason
 			inserted.CreatedAt = now
 			inserted.UpdatedAt = now
@@ -133,7 +186,8 @@ func ApplyMastodon(ctx context.Context, file BlockFile) (insertCount int, update
 }
 
 func GetMastodonDomainBlocks(ctx context.Context, tx pgx.Tx) map[string]MastodonDomainBlock {
-	const sql = `SELECT id, domain, private_comment, public_comment, created_at, updated_at, severity, reject_media, reject_reports, obfuscate FROM public.domain_blocks`
+	const sql = SQLSelectDomainBlocks
+
 	rows, err := tx.Query(ctx, sql)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "fatal: failed to Query %q: %v\n", sql, err)
@@ -175,6 +229,7 @@ func GetMastodonDomainBlocks(ctx context.Context, tx pgx.Tx) map[string]Mastodon
 
 func InsertMastodonDomainBlock(ctx context.Context, tx pgx.Tx, block MastodonDomainBlock) {
 	var args [9]any
+	var sql string
 
 	args[0] = block.Domain
 	args[1] = block.PrivateComment
@@ -185,19 +240,12 @@ func InsertMastodonDomainBlock(ctx context.Context, tx pgx.Tx, block MastodonDom
 	args[6] = block.RejectMedia
 	args[7] = block.RejectReports
 	args[8] = block.Obfuscate
-
-	const sqlDomainBlock = `
-	INSERT INTO public.domain_blocks
-		(domain, private_comment, public_comment, created_at, updated_at, severity, reject_media, reject_reports, obfuscate)
-	VALUES
-		($1, $2, $3, $4, $5, $6, $7, $8, $9)
-	RETURNING id
-	`
+	sql = SQLInsertDomainBlocks
 
 	var insertID uint64
-	err := tx.QueryRow(ctx, sqlDomainBlock, args[:9]...).Scan(&insertID)
+	err := tx.QueryRow(ctx, sql, args[:9]...).Scan(&insertID)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: failed to QueryRow %q: %v\n", sqlDomainBlock, err)
+		fmt.Fprintf(os.Stderr, "fatal: failed to QueryRow %q: %v\n", sql, err)
 		os.Exit(1)
 	}
 
@@ -205,45 +253,35 @@ func InsertMastodonDomainBlock(ctx context.Context, tx pgx.Tx, block MastodonDom
 
 	args[0] = block.CreatedAt
 	args[1] = block.UpdatedAt
-	args[2] = -99
-	args[3] = "create"
-	args[4] = "DomainBlock"
+	args[2] = ServerAccountID
+	args[3] = ActionCreate
+	args[4] = TargetTypeDomainBlock
 	args[5] = insertID
 
 	var n int
-	var sqlAuditLog string
 	switch flagSoftware {
 	case Mastodon3x:
 		n = 7
 		args[6] = block.AsYAML()
-		sqlAuditLog = `
-		INSERT INTO public.admin_action_logs
-			(created_at, updated_at, account_id, action, target_type, target_id, recorded_changes)
-		VALUES
-			($1, $2, $3, $4, $5, $6, $7)
-		`
+		sql = SQLInsertAdminActionLogMastodon3x
 	default:
 		n = 9
 		args[6] = block.Domain
 		args[7] = ""
 		args[8] = ""
-		sqlAuditLog = `
-		INSERT INTO public.admin_action_logs
-			(created_at, updated_at, account_id, action, target_type, target_id, human_identifier, route_param, permalink)
-		VALUES
-			($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		`
+		sql = SQLInsertAdminActionLogMastodon4x
 	}
 
-	_, err = tx.Exec(ctx, sqlAuditLog, args[:n]...)
+	_, err = tx.Exec(ctx, sql, args[:n]...)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: failed to Exec %q: %v\n", sqlAuditLog, err)
+		fmt.Fprintf(os.Stderr, "fatal: failed to Exec %q: %v\n", sql, err)
 		os.Exit(1)
 	}
 }
 
 func UpdateMastodonDomainBlock(ctx context.Context, tx pgx.Tx, block MastodonDomainBlock) {
 	var args [9]any
+	var sql string
 
 	args[0] = block.ID
 	args[1] = block.PrivateComment
@@ -253,116 +291,79 @@ func UpdateMastodonDomainBlock(ctx context.Context, tx pgx.Tx, block MastodonDom
 	args[5] = block.RejectMedia
 	args[6] = block.RejectReports
 	args[7] = block.Obfuscate
+	sql = SQLUpdateDomainBlocksMastodon
 
-	const sqlDomainBlock = `
-	UPDATE public.domain_blocks
-	SET
-		private_comment = $2,
-		public_comment = $3,
-		updated_at = $4,
-		severity = $5,
-		reject_media = $6,
-		reject_reports = $7,
-		obfuscate = $8
-	WHERE
-		id = $1
-	`
-
-	_, err := tx.Exec(ctx, sqlDomainBlock, args[:8]...)
+	_, err := tx.Exec(ctx, sql, args[:8]...)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: failed to Exec %q: %v\n", sqlDomainBlock, err)
+		fmt.Fprintf(os.Stderr, "fatal: failed to Exec %q: %v\n", sql, err)
 		os.Exit(1)
 	}
 
 	args[0] = block.CreatedAt
 	args[1] = block.UpdatedAt
-	args[2] = -99
-	args[3] = "update"
-	args[4] = "DomainBlock"
+	args[2] = ServerAccountID
+	args[3] = ActionUpdate
+	args[4] = TargetTypeDomainBlock
 	args[5] = block.ID
 
 	var n int
-	var sqlAuditLog string
 	switch flagSoftware {
 	case Mastodon3x:
 		n = 7
 		args[6] = block.AsYAML()
-		sqlAuditLog = `
-		INSERT INTO public.admin_action_logs
-			(created_at, updated_at, account_id, action, target_type, target_id, recorded_changes)
-		VALUES
-			($1, $2, $3, $4, $5, $6, $7)
-		`
-
+		sql = SQLInsertAdminActionLogMastodon3x
 	default:
 		n = 9
 		args[6] = block.Domain
 		args[7] = ""
 		args[8] = ""
-		sqlAuditLog = `
-		INSERT INTO public.admin_action_logs
-			(created_at, updated_at, account_id, action, target_type, target_id, human_identifier, route_param, permalink)
-		VALUES
-			($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		`
+		sql = SQLInsertAdminActionLogMastodon4x
 	}
 
-	_, err = tx.Exec(ctx, sqlAuditLog, args[:n]...)
+	_, err = tx.Exec(ctx, sql, args[:n]...)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: failed to Exec %q: %v\n", sqlAuditLog, err)
+		fmt.Fprintf(os.Stderr, "fatal: failed to Exec %q: %v\n", sql, err)
 		os.Exit(1)
 	}
 }
 
 func DeleteMastodonDomainBlock(ctx context.Context, tx pgx.Tx, block MastodonDomainBlock) {
 	var args [9]any
+	var sql string
 
 	args[0] = block.ID
+	sql = SQLDeleteDomainBlocksMastodon
 
-	const sqlDomainBlock = `DELETE FROM public.domain_blocks WHERE id = $1`
-
-	_, err := tx.Exec(ctx, sqlDomainBlock, args[:1]...)
+	_, err := tx.Exec(ctx, sql, args[:1]...)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: failed to Exec %q: %v\n", sqlDomainBlock, err)
+		fmt.Fprintf(os.Stderr, "fatal: failed to Exec %q: %v\n", sql, err)
 		os.Exit(1)
 	}
 
 	args[0] = block.CreatedAt
 	args[1] = block.UpdatedAt
-	args[2] = -99
-	args[3] = "destroy"
-	args[4] = "DomainBlock"
+	args[2] = ServerAccountID
+	args[3] = ActionDestroy
+	args[4] = TargetTypeDomainBlock
 	args[5] = block.ID
 
 	var n int
-	var sqlAuditLog string
 	switch flagSoftware {
 	case Mastodon3x:
 		n = 7
 		args[6] = block.AsYAML()
-		sqlAuditLog = `
-		INSERT INTO public.admin_action_logs
-			(created_at, updated_at, account_id, action, target_type, target_id, recorded_changes)
-		VALUES
-			($1, $2, $3, $4, $5, $6, $7)
-		`
-
+		sql = SQLInsertAdminActionLogMastodon3x
 	default:
 		n = 9
 		args[6] = block.Domain
 		args[7] = ""
 		args[8] = ""
-		sqlAuditLog = `
-		INSERT INTO public.admin_action_logs
-			(created_at, updated_at, account_id, action, target_type, target_id, human_identifier, route_param, permalink)
-		VALUES
-			($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		`
+		sql = SQLInsertAdminActionLogMastodon4x
 	}
 
-	_, err = tx.Exec(ctx, sqlAuditLog, args[:n]...)
+	_, err = tx.Exec(ctx, sql, args[:n]...)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: failed to Exec %q: %v\n", sqlAuditLog, err)
+		fmt.Fprintf(os.Stderr, "fatal: failed to Exec %q: %v\n", sql, err)
 		os.Exit(1)
 	}
 }
@@ -387,6 +388,8 @@ func (block MastodonDomainBlock) AsYAML() string {
 		severity = "silence"
 	case SeveritySuspend:
 		severity = "suspend"
+	case SeverityNoOp:
+		severity = "noop"
 	default:
 		severity = "noop"
 	}

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"net/http"
@@ -28,18 +27,18 @@ func (ad AccountData) CookieString() (string, bool) {
 		return "", false
 	}
 
-	var buf bytes.Buffer
+	gBuffer.Reset()
 	isNext := false
 	for name, value := range ad.Cookies {
 		if isNext {
-			buf.WriteString("; ")
+			gBuffer.WriteString("; ")
 		}
-		buf.WriteString(name)
-		buf.WriteByte('=')
-		buf.WriteString(value)
+		gBuffer.WriteString(name)
+		gBuffer.WriteByte('=')
+		gBuffer.WriteString(value)
 		isNext = true
 	}
-	return buf.String(), true
+	return gBuffer.String(), true
 }
 
 func cmdPrepareData() {

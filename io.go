@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 )
 
+var gBuffer bytes.Buffer
+
 func ReadFile(filePath string) []byte {
 	raw, err := os.ReadFile(filePath)
 	if err != nil {
@@ -105,8 +107,8 @@ func ReadJsonFile(out any, filePath string) {
 }
 
 func WriteJsonFile(filePath string, in any, isPrivate bool) {
-	var buf bytes.Buffer
-	e := json.NewEncoder(&buf)
+	gBuffer.Reset()
+	e := json.NewEncoder(&gBuffer)
 	e.SetIndent("", "  ")
 	e.SetEscapeHTML(false)
 	err := e.Encode(in)
@@ -114,7 +116,7 @@ func WriteJsonFile(filePath string, in any, isPrivate bool) {
 		fmt.Fprintf(os.Stderr, "fatal: %q: failed encode data to JSON: %v\n", filePath, err)
 		os.Exit(1)
 	}
-	raw := buf.Bytes()
+	raw := gBuffer.Bytes()
 	raw = bytes.TrimSpace(raw)
 	raw = bytes.ReplaceAll(raw, []byte{'\n'}, []byte{'\r', '\n'})
 	raw = append(raw, '\r', '\n')

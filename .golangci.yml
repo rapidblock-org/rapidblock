@@ -1,0 +1,12 @@
+run:
+  go: "1.19"
+  modules-download-mode: "readonly"
+output:
+  sort-results: true
+linters:
+  enable:
+    - goconst
+    - goimports
+    - gosec
+severity:
+  default-severity: error

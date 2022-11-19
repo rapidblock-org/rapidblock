@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"strconv"
@@ -25,10 +24,7 @@ var (
 	gIntStrCache  = make(map[uint64]string, 64)
 	gLiteralCache = make(map[yamlLiteralKey]*yaml.Node, 64)
 	gStringCache  = make(map[string]*yaml.Node, 64)
-	gAliasCache   = make(map[*yaml.Node]*yaml.Node, 64)
 	gMapCache     = make([]yamlMapCacheItem, 0, 64)
-	gLastAnchorID uint64
-	gBuffer       bytes.Buffer
 )
 
 func yamlMakeBool(value bool) *yaml.Node {
@@ -101,25 +97,6 @@ func yamlMakeMap(content ...*yaml.Node) *yaml.Node {
 
 func yamlMakeTaggedMap(tag string, content ...*yaml.Node) *yaml.Node {
 	return yamlMakeMapCommon(true, tag, content)
-}
-
-func yamlMakeAlias(source *yaml.Node) *yaml.Node {
-	node := gAliasCache[source]
-	if node == nil {
-		if source.Anchor == "" {
-			gLastAnchorID++
-			source.Anchor = strconv.FormatUint(gLastAnchorID, 10)
-		}
-		node = &yaml.Node{
-			Kind:  yaml.AliasNode,
-			Style: source.Style,
-			Tag:   source.Tag,
-			Alias: source,
-			Value: source.Anchor,
-		}
-		gAliasCache[source] = node
-	}
-	return node
 }
 
 func yamlMakeDoc(child *yaml.Node) *yaml.Node {
