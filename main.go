@@ -7,7 +7,12 @@ import (
 	getopt "github.com/pborman/getopt/v2"
 )
 
-var Version = "devel"
+var (
+	Version    = "devel"
+	Commit     = "unknown"
+	CommitDate = "unknown"
+	TreeState  = "unknown"
+)
 
 const (
 	PrepareData = "prepare-data"
@@ -65,6 +70,9 @@ func main() {
 
 	if flagVersion {
 		fmt.Println(Version)
+		fmt.Println(Commit)
+		fmt.Println(CommitDate)
+		fmt.Println(TreeState)
 		return
 	}
 

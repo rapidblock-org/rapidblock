@@ -2,11 +2,9 @@
 
 version: 1
 env:
-  - GO111MODULE=on
   - CGO_ENABLED=0
 flags:
   - -trimpath
-  - -tags=netgo
 goos:
   - linux
 goarch:
@@ -14,4 +12,7 @@ goarch:
   - arm64
 binary: rapidblock-{{ .Os }}-{{ .Arch }}
 ldflags:
-  - "-X main.Version={{ .Version }}"
+  - "-X main.Version={{ .Env.VERSION }}"
+  - "-X main.Commit={{ .Env.COMMIT }}"
+  - "-X main.CommitDate={{ .Env.COMMIT_DATE }}"
+  - "-X main.TreeState={{ .Env.TREE_STATE }}"
