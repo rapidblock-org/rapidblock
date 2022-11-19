@@ -27,7 +27,7 @@ jobs:
           echo "commit=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
           echo "version=$(git describe --tags --always --dirty | cut -c2-)" >> "$GITHUB_OUTPUT"
           echo "tree-state=$(if git diff --quiet; then echo "clean"; else echo "dirty"; fi)" >> "$GITHUB_OUTPUT"
-  build:
+  build-amd64:
     permissions:
       id-token: write  # To sign the provenance.
       contents: write  # To upload assets to release.
@@ -38,3 +38,16 @@ jobs:
       go-version: "1.19"
       evaluated-envs: "COMMIT_DATE:${{needs.args.outputs.commit-date}}, COMMIT:${{needs.args.outputs.commit}}, VERSION:${{needs.args.outputs.version}}, TREE_STATE:${{needs.args.outputs.tree-state}}"
       upload-assets: true
+      config-file: ".slsa-goreleaser.amd64.yml"
+  build-arm64:
+    permissions:
+      id-token: write  # To sign the provenance.
+      contents: write  # To upload assets to release.
+      actions: read    # To read the workflow path.
+    needs: args
+    uses: slsa-framework/slsa-github-generator/.github/workflows/builder_go_slsa3.yml@v1.2.2
+    with:
+      go-version: "1.19"
+      evaluated-envs: "COMMIT_DATE:${{needs.args.outputs.commit-date}}, COMMIT:${{needs.args.outputs.commit}}, VERSION:${{needs.args.outputs.version}}, TREE_STATE:${{needs.args.outputs.tree-state}}"
+      upload-assets: true
+      config-file: ".slsa-goreleaser.arm64.yml"

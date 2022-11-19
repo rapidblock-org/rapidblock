@@ -5,11 +5,8 @@ env:
   - CGO_ENABLED=0
 flags:
   - -trimpath
-goos:
-  - linux
-goarch:
-  - amd64
-  - arm64
+goos: linux
+goarch: arm64
 binary: rapidblock-{{ .Os }}-{{ .Arch }}
 ldflags:
   - "-X main.Version={{ .Env.VERSION }}"
