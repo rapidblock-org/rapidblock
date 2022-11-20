@@ -8,7 +8,7 @@ on:
   pull_request:
     branches: [ "*" ]
 jobs:
-  build:
+  go:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
