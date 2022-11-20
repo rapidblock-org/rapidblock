@@ -22,13 +22,13 @@ const (
 	RubyTimeFormat          = "2006-01-02 15:04:05.000000000 Z07:00"
 )
 
-const SQLSelectDomainBlocks = `
+const SQLSelectDomainBlocksMastodon = `
 SELECT
 	id, domain, private_comment, public_comment, created_at, updated_at, severity, reject_media, reject_reports, obfuscate
 FROM public.domain_blocks
 `
 
-const SQLInsertDomainBlocks = `
+const SQLInsertDomainBlocksMastodon = `
 INSERT INTO public.domain_blocks
 	(domain, private_comment, public_comment, created_at, updated_at, severity, reject_media, reject_reports, obfuscate)
 VALUES
@@ -130,7 +130,6 @@ func ApplyMastodon(ctx context.Context, file BlockFile) (insertCount int, update
 	now := time.Now().UTC()
 
 	for domain, block := range file.Blocks {
-		// TODO: add Block.IsBlock and possibility of deleting blocks
 		existing, hasExisting := existingBlocks[domain]
 
 		// If an admin has made a local decision for this domain, leave it alone.
@@ -139,7 +138,7 @@ func ApplyMastodon(ctx context.Context, file BlockFile) (insertCount int, update
 		}
 
 		switch {
-		case hasExisting && block.IsBlocked:
+		case block.IsBlocked && hasExisting:
 			updated := existing
 			updated.PublicComment = block.Reason
 			updated.Severity = SeveritySuspend
@@ -151,12 +150,6 @@ func ApplyMastodon(ctx context.Context, file BlockFile) (insertCount int, update
 				UpdateMastodonDomainBlock(ctx, tx, updated)
 				updateCount++
 			}
-
-		case hasExisting:
-			deleted := existing
-			deleted.UpdatedAt = now
-			DeleteMastodonDomainBlock(ctx, tx, deleted)
-			deleteCount++
 
 		case block.IsBlocked:
 			var inserted MastodonDomainBlock
@@ -172,8 +165,11 @@ func ApplyMastodon(ctx context.Context, file BlockFile) (insertCount int, update
 			InsertMastodonDomainBlock(ctx, tx, inserted)
 			insertCount++
 
-		default:
-			// nothing to do
+		case hasExisting:
+			deleted := existing
+			deleted.UpdatedAt = now
+			DeleteMastodonDomainBlock(ctx, tx, deleted)
+			deleteCount++
 		}
 	}
 
@@ -186,7 +182,7 @@ func ApplyMastodon(ctx context.Context, file BlockFile) (insertCount int, update
 }
 
 func GetMastodonDomainBlocks(ctx context.Context, tx pgx.Tx) map[string]MastodonDomainBlock {
-	const sql = SQLSelectDomainBlocks
+	const sql = SQLSelectDomainBlocksMastodon
 
 	rows, err := tx.Query(ctx, sql)
 	if err != nil {
@@ -240,7 +236,7 @@ func InsertMastodonDomainBlock(ctx context.Context, tx pgx.Tx, block MastodonDom
 	args[6] = block.RejectMedia
 	args[7] = block.RejectReports
 	args[8] = block.Obfuscate
-	sql = SQLInsertDomainBlocks
+	sql = SQLInsertDomainBlocksMastodon
 
 	var insertID uint64
 	err := tx.QueryRow(ctx, sql, args[:9]...).Scan(&insertID)
