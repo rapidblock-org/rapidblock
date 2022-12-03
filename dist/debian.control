@@ -1,0 +1,11 @@
+Package: rapidblock
+Version: {version}
+Architecture: {arch}
+Maintainer: Donald King <chronos@chronos-tachyon.net>
+Installed-Size: {size}
+Section: contrib/net
+Priority: optional
+Homepage: https://rapidblock.org/
+Description: rapid dissemination of domain blocks for Mastodon
+ RapidBlock is a tool for disseminating domain-level moderation decisions
+ across participating nodes in the Fediverse.

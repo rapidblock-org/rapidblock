@@ -1,0 +1,16 @@
+# vim:set ft=crontab ts=8 sts=8 sw=8 noet:
+#
+# In source control, this file lives at:
+#   https://github.com/rapidblock-org/rapidblock/blob/main/dist/cron.crontab
+#
+# When installed via a package manager, this file lives at:
+#   /etc/cron.d/rapidblock
+#
+# The configuration file lives at:
+#   /etc/defaults/rapidblock
+#
+# The script itself lives at:
+#   /opt/rapidblock/scripts/cron.sh
+
+# m	h	dom	mon	dow	user		command
+0	*	*	*	*	mastodon	/opt/rapidblock/scripts/cron.sh
