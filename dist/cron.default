@@ -1,0 +1,25 @@
+# vim:set ft=sh:
+#
+# This file contains the configuration settings for the RapidBlock cron script.
+#
+# In source control, this file lives at:
+#   https://github.com/rapidblock-org/rapidblock/blob/main/dist/cron.default
+#
+# When installed via a package manager, this file lives at:
+#   /etc/default/rapidblock
+#
+# The crontab file lives at:
+#   /etc/cron.d/rapidblock
+#
+# The script itself lives at:
+#   /opt/rapidblock/scripts/cron.sh
+
+ENABLED=0
+SLEEP_MIN=0
+SLEEP_MAX=3600
+BLOCKLIST_URL="https://rapidblock.org/blocklist.json"
+SIGNATURE_URL="https://rapidblock.org/blocklist.json.sig"
+PUBLIC_KEY_FILE="/opt/rapidblock/share/rapidblock-dot-org.pub"
+INSTANCES=( \
+  "mastodon-4.x|postgresql:///mastodon?host=/run/postgresql&port=5433" \
+)
