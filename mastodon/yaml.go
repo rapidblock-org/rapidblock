@@ -1,8 +1,8 @@
-package main
+package mastodon
 
 import (
+	"bytes"
 	"fmt"
-	"os"
 	"strconv"
 
 	yaml "gopkg.in/yaml.v3"
@@ -27,6 +27,24 @@ var (
 	gMapCache     = make([]yamlMapCacheItem, 0, 64)
 )
 
+func yamlMakeLiteral(tag string, value string) *yaml.Node {
+	key := yamlLiteralKey{tag, value}
+	node := gLiteralCache[key]
+	if node == nil {
+		node = &yaml.Node{
+			Kind:  yaml.ScalarNode,
+			Tag:   tag,
+			Value: value,
+		}
+		gLiteralCache[key] = node
+	}
+	return node
+}
+
+func yamlMakeNull() *yaml.Node {
+	return yamlMakeLiteral("!!null", "null")
+}
+
 func yamlMakeBool(value bool) *yaml.Node {
 	if value {
 		return yamlMakeLiteral("!!bool", "true")
@@ -43,20 +61,6 @@ func yamlMakeInt(value uint64) *yaml.Node {
 	return yamlMakeLiteral("!!int", str)
 }
 
-func yamlMakeLiteral(tag string, value string) *yaml.Node {
-	key := yamlLiteralKey{tag, value}
-	node := gLiteralCache[key]
-	if node == nil {
-		node = &yaml.Node{
-			Kind:  yaml.ScalarNode,
-			Tag:   tag,
-			Value: value,
-		}
-		gLiteralCache[key] = node
-	}
-	return node
-}
-
 func yamlMakeString(value string) *yaml.Node {
 	node := gStringCache[value]
 	if node == nil {
@@ -68,6 +72,13 @@ func yamlMakeString(value string) *yaml.Node {
 		gStringCache[value] = node
 	}
 	return node
+}
+
+func yamlMakeNullString(value NullString) *yaml.Node {
+	if value.IsValid {
+		return yamlMakeString(value.StringValue)
+	}
+	return yamlMakeNull()
 }
 
 func yamlMakeMapCommon(tagged bool, tag string, content []*yaml.Node) *yaml.Node {
@@ -107,24 +118,22 @@ func yamlMakeDoc(child *yaml.Node) *yaml.Node {
 }
 
 func yamlToString(doc *yaml.Node) string {
-	gBuffer.Reset()
-	gBuffer.WriteString("---\n")
+	var buf bytes.Buffer
+	buf.WriteString("---\n")
 
-	e := yaml.NewEncoder(&gBuffer)
+	e := yaml.NewEncoder(&buf)
 	e.SetIndent(2)
 	err := e.Encode(doc)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: failed to encode audit log data to YAML: %v\n", err)
-		os.Exit(1)
+		panic(fmt.Errorf("failed to encode audit log data to YAML: %w", err))
 	}
 
 	err = e.Close()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: failed to encode audit log data to YAML: %v\n", err)
-		os.Exit(1)
+		panic(fmt.Errorf("failed to encode audit log data to YAML: %w", err))
 	}
 
-	return gBuffer.String()
+	return buf.String()
 }
 
 func yamlSameContent(a []*yaml.Node, b []*yaml.Node) bool {

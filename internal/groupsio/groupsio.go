@@ -1,4 +1,4 @@
-package main
+package groupsio
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-type GIOList[T any] struct {
+type List[T any] struct {
 	TotalCount    int  `json:"total_count"`
 	StartItem     int  `json:"start_item"`
 	EndItem       int  `json:"end_item"`
@@ -22,20 +22,20 @@ type GIOList[T any] struct {
 	Data          []T  `json:"data"`
 }
 
-type GIODatabaseRow struct {
-	ID        int                `json:"id"`
-	TableID   int                `json:"table_id"`
-	GroupID   int                `json:"group_id"`
-	RowNumber int                `json:"row_num"`
-	NumValues int                `json:"num_vals"`
-	Created   time.Time          `json:"created"`
-	Updated   time.Time          `json:"updated"`
-	Values    []GIODatabaseValue `json:"vals"`
+type DatabaseRow struct {
+	ID        int             `json:"id"`
+	TableID   int             `json:"table_id"`
+	GroupID   int             `json:"group_id"`
+	RowNumber int             `json:"row_num"`
+	NumValues int             `json:"num_vals"`
+	Created   time.Time       `json:"created"`
+	Updated   time.Time       `json:"updated"`
+	Values    []DatabaseValue `json:"vals"`
 }
 
-type GIODatabaseValue struct {
+type DatabaseValue struct {
 	ID        int       `json:"col_id"`
-	Type      GIOType   `json:"col_type"`
+	Type      Type      `json:"col_type"`
 	Choices   []int     `json:"multi_choice"`
 	Text      string    `json:"text"`
 	HTMLText  string    `json:"html_text"`
@@ -48,7 +48,7 @@ type GIODatabaseValue struct {
 	Checked   bool      `json:"checked"`
 }
 
-func (value GIODatabaseValue) AsString() string {
+func (value DatabaseValue) AsString() string {
 	switch value.Type {
 	case TextType:
 		return value.Text
@@ -74,7 +74,7 @@ func (value GIODatabaseValue) AsString() string {
 	}
 }
 
-func (value GIODatabaseValue) AsTime() time.Time {
+func (value DatabaseValue) AsTime() time.Time {
 	switch value.Type {
 	case DateType:
 		return value.Date
@@ -102,7 +102,7 @@ func (value GIODatabaseValue) AsTime() time.Time {
 	}
 }
 
-func (value GIODatabaseValue) AsBool() bool {
+func (value DatabaseValue) AsBool() bool {
 	switch value.Type {
 	case CheckboxType:
 		return value.Checked
@@ -148,7 +148,7 @@ func (value GIODatabaseValue) AsBool() bool {
 	}
 }
 
-func (value GIODatabaseValue) AsSet(choiceNamesByID map[int]string) map[string]struct{} {
+func (value DatabaseValue) AsSet(choiceNamesByID map[int]string) map[string]struct{} {
 	switch value.Type {
 	case MultipleChoiceType:
 		set := make(map[string]struct{}, len(value.Choices))
@@ -169,7 +169,7 @@ func (value GIODatabaseValue) AsSet(choiceNamesByID map[int]string) map[string]s
 	}
 }
 
-func GIOForEach[T any](
+func ForEach[T any](
 	ctx context.Context,
 	client *http.Client,
 	baseURL *url.URL,
@@ -213,7 +213,7 @@ func GIOForEach[T any](
 			return fmt.Errorf("%s: %s: unexpected status %03d", http.MethodGet, urlstr, resp.StatusCode)
 		}
 
-		var list GIOList[T]
+		var list List[T]
 		err = json.Unmarshal(rawBody, &list)
 		if err != nil {
 			return fmt.Errorf("%s: %s: failed to decode response body as JSON: %w", http.MethodGet, urlstr, err)

@@ -1,0 +1,14 @@
+---
+servers:
+  - name: "first.example.social"
+    mode: "mastodon-4.x-rest"
+    uri: "https://first.example.social/"
+    clientToken: "<created by manually running 'rapidblock register -u https://first.example.social/'>"
+  - name: "second.example.social"
+    mode: "mastodon-4.x-sql"
+    uri: "postgresql://<user>:<password>@second.example.social:5432/mastodon?sslmode=verify-full"
+  - name: "third.example.social"
+    mode: "mastodon-4.x-sql"
+    # postgres connections over local sockets use UID authentication
+    # therefore, you have to run "mastodon apply" as the mastodon user for this to work
+    uri: "postgresql:///mastodon?host=/run/postgresql&port=5433"

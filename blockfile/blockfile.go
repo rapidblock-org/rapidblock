@@ -1,11 +1,11 @@
-package main
+package blockfile
 
 import (
 	"time"
 )
 
 const (
-	BlockFileSpecV1 = "https://rapidblock.org/spec/v1/"
+	SpecV1 = "https://rapidblock.org/spec/v1/"
 )
 
 type BlockFile struct {
