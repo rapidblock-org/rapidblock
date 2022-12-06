@@ -9,7 +9,7 @@ import (
 
 	"github.com/chronos-tachyon/rapidblock/blockapply"
 	"github.com/chronos-tachyon/rapidblock/blockfile"
-	"github.com/chronos-tachyon/rapidblock/commands/command"
+	"github.com/chronos-tachyon/rapidblock/command"
 	"github.com/chronos-tachyon/rapidblock/internal/iohelpers"
 )
 
@@ -65,7 +65,7 @@ func Main(configFile string, dataFile string) int {
 			fmt.Fprintf(os.Stderr, "fatal: %s: %v\n", server.Name, err)
 			return 1
 		}
-		stats.WriteTo(server.Name, os.Stdout)
+		_, _ = stats.WriteTo(server.Name, os.Stdout)
 	}
 	return 0
 }

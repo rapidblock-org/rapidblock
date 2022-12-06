@@ -15,7 +15,7 @@ import (
 
 	getopt "github.com/pborman/getopt/v2"
 
-	"github.com/chronos-tachyon/rapidblock/commands/command"
+	"github.com/chronos-tachyon/rapidblock/command"
 	"github.com/chronos-tachyon/rapidblock/internal/appversion"
 	"github.com/chronos-tachyon/rapidblock/internal/httpclient"
 	"github.com/chronos-tachyon/rapidblock/mastodon"
@@ -133,6 +133,7 @@ func Main(launchBrowser bool, baseURL string) int {
 	browseURL.RawQuery = q.Encode()
 	fmt.Printf("%s\n", browseURL.String())
 	if launchBrowser {
+		//nolint:gosec
 		cmd := exec.CommandContext(ctx, "xdg-open", browseURL.String())
 		err = cmd.Run()
 		if err != nil {

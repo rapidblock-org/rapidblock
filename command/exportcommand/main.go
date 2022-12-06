@@ -11,7 +11,7 @@ import (
 	getopt "github.com/pborman/getopt/v2"
 
 	"github.com/chronos-tachyon/rapidblock/blockfile"
-	"github.com/chronos-tachyon/rapidblock/commands/command"
+	"github.com/chronos-tachyon/rapidblock/command"
 	"github.com/chronos-tachyon/rapidblock/internal/iohelpers"
 )
 

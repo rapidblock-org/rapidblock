@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,8 +17,6 @@ import (
 	"github.com/chronos-tachyon/rapidblock/blockfile"
 	"github.com/chronos-tachyon/rapidblock/internal/httpclient"
 )
-
-var errNotImplemented = errors.New("not implemented")
 
 func ApplyREST(ctx context.Context, server blockapply.Server, file blockfile.BlockFile) (stats blockapply.Stats, err error) {
 	u, err := url.Parse(server.URI)

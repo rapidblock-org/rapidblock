@@ -6,7 +6,7 @@ import (
 	"net/http"
 )
 
-func WriteDebug(w io.Writer, header http.Header, body []byte) (int, error) {
+func WriteDebug(w io.Writer, header http.Header, body []byte) {
 	var buf bytes.Buffer
 	buf.Grow(1024 + len(body))
 
@@ -35,19 +35,18 @@ func WriteDebug(w io.Writer, header http.Header, body []byte) (int, error) {
 			s = stateEndOfLine
 		case s == stateEndOfLine:
 			buf.WriteByte('\n')
-			s = stateStartOfLine
 			fallthrough
 		case s == stateStartOfLine:
 			buf.WriteByte('\t')
-			s = stateIndented
 			fallthrough
 		default:
 			buf.WriteByte(ch)
+			s = stateIndented
 		}
 	}
 	if s != stateStartOfLine {
 		buf.WriteByte('\n')
 	}
 
-	return w.Write(buf.Bytes())
+	_, _ = w.Write(buf.Bytes())
 }

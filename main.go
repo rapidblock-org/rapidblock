@@ -9,14 +9,14 @@ import (
 
 	getopt "github.com/pborman/getopt/v2"
 
-	"github.com/chronos-tachyon/rapidblock/commands/applycommand"
-	"github.com/chronos-tachyon/rapidblock/commands/command"
-	"github.com/chronos-tachyon/rapidblock/commands/exportcommand"
-	"github.com/chronos-tachyon/rapidblock/commands/keygencommand"
-	"github.com/chronos-tachyon/rapidblock/commands/preparecommand"
-	"github.com/chronos-tachyon/rapidblock/commands/registercommand"
-	"github.com/chronos-tachyon/rapidblock/commands/signcommand"
-	"github.com/chronos-tachyon/rapidblock/commands/verifycommand"
+	"github.com/chronos-tachyon/rapidblock/command"
+	"github.com/chronos-tachyon/rapidblock/command/applycommand"
+	"github.com/chronos-tachyon/rapidblock/command/exportcommand"
+	"github.com/chronos-tachyon/rapidblock/command/keygencommand"
+	"github.com/chronos-tachyon/rapidblock/command/preparecommand"
+	"github.com/chronos-tachyon/rapidblock/command/registercommand"
+	"github.com/chronos-tachyon/rapidblock/command/signcommand"
+	"github.com/chronos-tachyon/rapidblock/command/verifycommand"
 	"github.com/chronos-tachyon/rapidblock/internal/appversion"
 
 	_ "github.com/chronos-tachyon/rapidblock/mastodon"
@@ -46,7 +46,7 @@ func main() {
 	n := len(osArgs)
 	switch {
 	case n <= 0:
-		osArgs = make([]string, 1, 1)
+		osArgs = make([]string, 1)
 		osArgs[0] = ProgramName
 	default:
 		ProgramName = filepath.Base(osArgs[0])
@@ -84,19 +84,19 @@ func main() {
 	}
 
 	if flagHelp && !hasCommandName {
-		printHelp(os.Stdout)
+		Must1(PrintHelp(os.Stdout))
 		return
 	}
 
 	if commandName == "" {
-		printHelp(os.Stderr)
+		Must1(PrintHelp(os.Stderr))
 		os.Exit(1)
 		return
 	}
 
 	c := LookupCommand(commandName)
 	if flagHelp {
-		printHelpForCommand(os.Stdout, commandName, c)
+		Must1(PrintHelpForCommand(os.Stdout, commandName, c))
 		return
 	}
 	argv[0] = fmt.Sprint(ProgramName, " ", commandName)
@@ -125,12 +125,12 @@ var HelpFactory command.FactoryFunc = func() command.Command {
 			n := options.NArgs()
 			switch {
 			case n <= 0:
-				printHelp(os.Stdout)
+				Must1(PrintHelp(os.Stdout))
 				return 0
 			case n == 1:
 				commandName := options.Arg(0)
 				c := LookupCommand(commandName)
-				printHelpForCommand(os.Stdout, commandName, c)
+				Must1(PrintHelpForCommand(os.Stdout, commandName, c))
 				return 0
 			default:
 				fmt.Fprintf(os.Stderr, "fatal: found %d unexpected positional arguments\n", n-1)
@@ -155,7 +155,7 @@ var VersionFactory command.FactoryFunc = func() command.Command {
 	}
 }
 
-func printHelp(w io.Writer) (int, error) {
+func PrintHelp(w io.Writer) (int, error) {
 	var buf bytes.Buffer
 	buf.Grow(256)
 
@@ -197,12 +197,24 @@ func printHelp(w io.Writer) (int, error) {
 	return w.Write(buf.Bytes())
 }
 
-func printHelpForCommand(w io.Writer, commandName string, c command.Command) {
-	c.Options.SetProgram(fmt.Sprint(ProgramName, " ", commandName))
+func PrintHelpForCommand(w io.Writer, commandName string, c command.Command) (int, error) {
+	var buf bytes.Buffer
+	buf.Grow(1 << 10) // 1 KiB
 	if c.Description != "" {
-		fmt.Fprintf(w, "%s\n", c.Description)
+		fmt.Fprintf(&buf, "%s\n", c.Description)
 	}
-	c.Options.PrintUsage(w)
+	c.Options.SetProgram(fmt.Sprint(ProgramName, " ", commandName))
+	c.Options.PrintUsage(&buf)
+	return w.Write(buf.Bytes())
+}
+
+func Must1[T0 any](arg0 T0, err error) T0 {
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
+		os.Exit(1)
+		panic(nil)
+	}
+	return arg0
 }
 
 func init() {
