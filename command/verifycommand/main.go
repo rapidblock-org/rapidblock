@@ -1,19 +1,31 @@
 package verifycommand
 
 import (
+	"context"
 	"crypto/ed25519"
 	"encoding/base64"
-	"fmt"
-	"os"
 
 	getopt "github.com/pborman/getopt/v2"
+	"github.com/rs/zerolog"
 
 	"github.com/chronos-tachyon/rapidblock/command"
 	"github.com/chronos-tachyon/rapidblock/internal/checksum"
 	"github.com/chronos-tachyon/rapidblock/internal/iohelpers"
 )
 
-var Factory command.FactoryFunc = func() command.Command {
+type verifyFactory struct {
+	command.BaseFactory
+}
+
+func (verifyFactory) Name() string {
+	return "verify"
+}
+
+func (verifyFactory) Description() string {
+	return "Verifies an Ed25519 cryptographic signature."
+}
+
+func (verifyFactory) New(dispatcher command.Dispatcher) (*getopt.Set, command.MainFunc) {
 	var (
 		isText        bool
 		publicKeyFile string
@@ -28,45 +40,56 @@ var Factory command.FactoryFunc = func() command.Command {
 	options.FlagLong(&dataFile, "data-file", 'd', "path to the signed data file to verify")
 	options.FlagLong(&signatureFile, "signature-file", 's', "path to the detached signature file to verify")
 
-	return command.Command{
-		Name:        "verify",
-		Description: "Verifies an Ed25519 cryptographic signature.",
-		Options:     options,
-		Main: func() int {
-			if publicKeyFile == "" {
-				fmt.Fprintf(os.Stderr, "fatal: missing required flag -p / --public-key-file\n")
-				return 1
-			}
-			if dataFile == "" {
-				fmt.Fprintf(os.Stderr, "fatal: missing required flag -d / --data-file\n")
-				return 1
-			}
-			if signatureFile == "" {
-				fmt.Fprintf(os.Stderr, "fatal: missing required flag -s / --signature-file\n")
-				return 1
-			}
-			return Main(isText, publicKeyFile, dataFile, signatureFile)
-		},
+	return options, func(ctx context.Context) int {
+		if publicKeyFile == "" {
+			zerolog.Ctx(ctx).
+				Error().
+				Msg("missing required flag -p / --public-key-file")
+			return 1
+		}
+		if dataFile == "" {
+			zerolog.Ctx(ctx).
+				Error().
+				Msg("missing required flag -d / --data-file")
+			return 1
+		}
+		if signatureFile == "" {
+			zerolog.Ctx(ctx).
+				Error().
+				Msg("missing required flag -s / --signature-file")
+			return 1
+		}
+		return Main(ctx, isText, publicKeyFile, dataFile, signatureFile)
 	}
 }
 
-func Main(isText bool, publicKeyFile string, dataFile string, signatureFile string) int {
+var Factory command.Factory = verifyFactory{}
+
+func Main(ctx context.Context, isText bool, publicKeyFile string, dataFile string, signatureFile string) int {
+	logger := zerolog.Ctx(ctx).
+		With().
+		Str("publicKeyFile", publicKeyFile).
+		Str("dataFile", dataFile).
+		Str("signatureFile", signatureFile).
+		Bool("isText", isText).
+		Logger()
+
 	raw, err := iohelpers.ReadBase64File(publicKeyFile, ed25519.PublicKeySize)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
+		logger.Error().Err(err).Send()
 		return 1
 	}
 	pubKey := ed25519.PublicKey(raw)
 
 	signature, err := iohelpers.ReadBase64File(signatureFile, ed25519.SignatureSize)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
+		logger.Error().Err(err).Send()
 		return 1
 	}
 
 	checksum, err := checksum.File(dataFile, isText)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
+		logger.Error().Err(err).Send()
 		return 1
 	}
 
@@ -74,14 +97,18 @@ func Main(isText bool, publicKeyFile string, dataFile string, signatureFile stri
 		str0 := base64.StdEncoding.EncodeToString(checksum)
 		str1 := base64.StdEncoding.EncodeToString(pubKey)
 		str2 := base64.StdEncoding.EncodeToString(signature)
-		str3 := "with"
+		str3 := ""
 		if isText {
-			str3 = "without"
+			str3 = "out"
 		}
-		fmt.Fprintf(os.Stderr, "fatal: signature verification failed!\n\tSHA-256 checksum: %s\n\tEd25519 public key: %s\n\tEd25519 signature: %s\n\tmaybe try again %s --text?\n", str0, str1, str2, str3)
+		logger.Error().
+			Str("checksum", str0).
+			Str("publicKey", str1).
+			Str("signature", str2).
+			Msgf("signature verification failed! maybe try again with%s -t / --text?", str3)
 		return 1
 	}
 
-	fmt.Println("OK")
+	logger.Info().Msg("OK")
 	return 0
 }

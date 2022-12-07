@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"unicode"
@@ -16,7 +15,12 @@ import (
 	"github.com/chronos-tachyon/rapidblock/blockapply"
 	"github.com/chronos-tachyon/rapidblock/blockfile"
 	"github.com/chronos-tachyon/rapidblock/internal/httpclient"
+	"github.com/rs/zerolog"
 )
+
+func init() {
+	blockapply.SetFunc(blockapply.ModeMastodon4xREST, ApplyREST)
+}
 
 func ApplyREST(ctx context.Context, server blockapply.Server, file blockfile.BlockFile) (stats blockapply.Stats, err error) {
 	u, err := url.Parse(server.URI)
@@ -41,6 +45,8 @@ type RESTApplier struct {
 }
 
 func (applier *RESTApplier) Query(ctx context.Context, out map[string]DomainBlock) error {
+	logger := zerolog.Ctx(ctx)
+
 	method := http.MethodGet
 	urlstr := applier.BaseURL.JoinPath("/api/v1/admin/domain_blocks").String()
 
@@ -82,7 +88,7 @@ func (applier *RESTApplier) Query(ctx context.Context, out map[string]DomainBloc
 			out[block.Domain] = block
 		}
 
-		links, err := extractLinks(resp.Header)
+		links, err := extractLinks(logger, resp.Header)
 		if err != nil {
 			return fmt.Errorf("failed to extract Link headers from HTTP response: %w", err)
 		}
@@ -148,7 +154,6 @@ func (applier *RESTApplier) Insert(ctx context.Context, block DomainBlock) error
 		return fmt.Errorf("failed to parse HTTP response body as JSON: %q, %q, %03d: %w", method, urlstr, respStatus, err)
 	}
 
-	fmt.Fprintf(os.Stderr, "debug: %+v\n", result)
 	return nil
 }
 
@@ -201,7 +206,6 @@ func (applier *RESTApplier) Update(ctx context.Context, block DomainBlock) error
 		return fmt.Errorf("failed to parse HTTP response body as JSON: %q, %q, %03d: %w", method, urlstr, respStatus, err)
 	}
 
-	fmt.Fprintf(os.Stderr, "debug: %+v\n", result)
 	return nil
 }
 
@@ -265,7 +269,7 @@ type link struct {
 	Blocking       string
 }
 
-func extractLinks(header http.Header) ([]link, error) {
+func extractLinks(logger *zerolog.Logger, header http.Header) ([]link, error) {
 	values := header.Values("link")
 	if len(values) == 0 {
 		return nil, nil
@@ -347,7 +351,10 @@ func extractLinks(header http.Header) ([]link, error) {
 		case "blocking":
 			partial.Blocking = paramValue
 		default:
-			fmt.Fprintf(os.Stderr, "warn: unknown Link header param %q=%q\n", paramName, paramValue)
+			logger.Warn().
+				Str("paramName", paramName).
+				Str("paramValue", paramValue).
+				Msg("unknown Link header param")
 		}
 	}
 
@@ -520,8 +527,4 @@ func setQueryNullString(q url.Values, name string, value NullString) {
 	} else {
 		q.Del(name)
 	}
-}
-
-func init() {
-	blockapply.SetFunc(blockapply.ModeMastodon4xREST, ApplyREST)
 }

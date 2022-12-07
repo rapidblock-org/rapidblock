@@ -2,20 +2,36 @@ package exportcommand
 
 import (
 	"bytes"
+	"context"
 	"encoding/csv"
-	"fmt"
-	"os"
 	"sort"
 	"strings"
 
 	getopt "github.com/pborman/getopt/v2"
+	"github.com/rs/zerolog"
 
 	"github.com/chronos-tachyon/rapidblock/blockfile"
 	"github.com/chronos-tachyon/rapidblock/command"
 	"github.com/chronos-tachyon/rapidblock/internal/iohelpers"
 )
 
-var Factory command.FactoryFunc = func() command.Command {
+type exportFactory struct {
+	command.BaseFactory
+}
+
+func (exportFactory) Name() string {
+	return "export"
+}
+
+func (exportFactory) Aliases() []string {
+	return []string{"export-csv"}
+}
+
+func (exportFactory) Description() string {
+	return "Exports the RapidBlock blocklist file to Mastodon's CSV format."
+}
+
+func (exportFactory) New(dispatcher command.Dispatcher) (*getopt.Set, command.MainFunc) {
 	var (
 		inputFile  string
 		outputFile string
@@ -26,30 +42,36 @@ var Factory command.FactoryFunc = func() command.Command {
 	options.FlagLong(&inputFile, "input-file", 'i', "path to the JSON file to export from")
 	options.FlagLong(&outputFile, "output-file", 'o', "path to the CSV file to export to")
 
-	return command.Command{
-		Name:        "export",
-		Aliases:     []string{"export-csv"},
-		Description: "Exports the RapidBlock blocklist file to Mastodon's CSV format.",
-		Options:     options,
-		Main: func() int {
-			if inputFile == "" {
-				fmt.Fprintf(os.Stderr, "fatal: missing required flag -i / --input-file\n")
-				return 1
-			}
-			if outputFile == "" {
-				fmt.Fprintf(os.Stderr, "fatal: missing required flag -o / --output-file\n")
-				return 1
-			}
-			return Main(inputFile, outputFile)
-		},
+	return options, func(ctx context.Context) int {
+		if inputFile == "" {
+			zerolog.Ctx(ctx).
+				Error().
+				Msg("missing required flag -i / --input-file")
+			return 1
+		}
+		if outputFile == "" {
+			zerolog.Ctx(ctx).
+				Error().
+				Msg("missing required flag -o / --output-file")
+			return 1
+		}
+		return Main(ctx, inputFile, outputFile)
 	}
 }
 
-func Main(inputFile string, outputFile string) int {
+var Factory command.Factory = exportFactory{}
+
+func Main(ctx context.Context, inputFile string, outputFile string) int {
+	logger := zerolog.Ctx(ctx).
+		With().
+		Str("inputFile", inputFile).
+		Str("outputFile", outputFile).
+		Logger()
+
 	var file blockfile.BlockFile
 	err := iohelpers.Load(&file, inputFile, true)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
+		logger.Error().Err(err).Send()
 		return 1
 	}
 
@@ -67,17 +89,17 @@ func Main(inputFile string, outputFile string) int {
 	w.UseCRLF = true
 	err = w.WriteAll(rows)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
+		logger.Error().Err(err).Send()
 		return 1
 	}
 	err = w.Error()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
+		logger.Error().Err(err).Send()
 		return 1
 	}
 	err = iohelpers.WriteFile(outputFile, false, buf.Bytes())
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
+		logger.Error().Err(err).Send()
 		return 1
 	}
 	return 0

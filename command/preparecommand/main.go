@@ -2,15 +2,14 @@ package preparecommand
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 	"sort"
 	"strconv"
 	"time"
 
 	getopt "github.com/pborman/getopt/v2"
+	"github.com/rs/zerolog"
 
 	"github.com/chronos-tachyon/rapidblock/blockfile"
 	"github.com/chronos-tachyon/rapidblock/command"
@@ -19,7 +18,19 @@ import (
 	"github.com/chronos-tachyon/rapidblock/internal/iohelpers"
 )
 
-var Factory command.FactoryFunc = func() command.Command {
+type prepareFactory struct {
+	command.BaseFactory
+}
+
+func (prepareFactory) Name() string {
+	return "prepare"
+}
+
+func (prepareFactory) Description() string {
+	return "Produces a RapidBlock blocklist file by pulling data from a spreadsheet."
+}
+
+func (prepareFactory) New(dispatcher command.Dispatcher) (*getopt.Set, command.MainFunc) {
 	var (
 		configFile string
 		dataFile   string
@@ -30,29 +41,36 @@ var Factory command.FactoryFunc = func() command.Command {
 	options.FlagLong(&configFile, "config-file", 'c', "path to the groups.io cookies and database column mappings")
 	options.FlagLong(&dataFile, "data-file", 'd', "path to the JSON file to create, export from, sign, verify, or apply")
 
-	return command.Command{
-		Name:        "prepare",
-		Description: "Produces a RapidBlock blocklist file by pulling data from a spreadsheet.",
-		Options:     options,
-		Main: func() int {
-			if configFile == "" {
-				fmt.Fprintf(os.Stderr, "fatal: missing required flag -c / --config-file\n")
-				return 1
-			}
-			if dataFile == "" {
-				fmt.Fprintf(os.Stderr, "fatal: missing required flag -d / --data-file\n")
-				return 1
-			}
-			return Main(configFile, dataFile)
-		},
+	return options, func(ctx context.Context) int {
+		if configFile == "" {
+			zerolog.Ctx(ctx).
+				Error().
+				Msg("missing required flag -c / --config-file")
+			return 1
+		}
+		if dataFile == "" {
+			zerolog.Ctx(ctx).
+				Error().
+				Msg("missing required flag -d / --data-file")
+			return 1
+		}
+		return Main(ctx, configFile, dataFile)
 	}
 }
 
-func Main(configFile string, dataFile string) int {
+var Factory command.Factory = prepareFactory{}
+
+func Main(ctx context.Context, configFile string, dataFile string) int {
+	logger := zerolog.Ctx(ctx).
+		With().
+		Str("configFile", configFile).
+		Str("dataFile", dataFile).
+		Logger()
+
 	var config groupsio.AccountConfig
 	err := iohelpers.Load(&config, configFile, true)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
+		logger.Error().Err(err).Send()
 		return 1
 	}
 
@@ -74,7 +92,6 @@ func Main(configFile string, dataFile string) int {
 	userAgent := httpclient.UserAgent
 	cookie, hasCookie := config.CookieString()
 
-	ctx := context.Background()
 	err = groupsio.ForEach(
 		ctx,
 		http.DefaultClient,
@@ -120,13 +137,13 @@ func Main(configFile string, dataFile string) int {
 		},
 	)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
+		logger.Error().Err(err).Send()
 		return 1
 	}
 
 	err = iohelpers.Store(dataFile, false, file)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
+		logger.Error().Err(err).Send()
 		return 1
 	}
 	return 0

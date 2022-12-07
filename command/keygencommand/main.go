@@ -1,17 +1,33 @@
 package keygencommand
 
 import (
+	"context"
 	"crypto/ed25519"
-	"fmt"
-	"os"
 
 	getopt "github.com/pborman/getopt/v2"
+	"github.com/rs/zerolog"
 
 	"github.com/chronos-tachyon/rapidblock/command"
 	"github.com/chronos-tachyon/rapidblock/internal/iohelpers"
 )
 
-var Factory command.FactoryFunc = func() command.Command {
+type keygenFactory struct {
+	command.BaseFactory
+}
+
+func (keygenFactory) Name() string {
+	return "keygen"
+}
+
+func (keygenFactory) Aliases() []string {
+	return []string{"genkey", "generate-key"}
+}
+
+func (keygenFactory) Description() string {
+	return "Generates an Ed25519 cryptographic key pair for signing files."
+}
+
+func (keygenFactory) New(dispatcher command.Dispatcher) (*getopt.Set, command.MainFunc) {
 	var (
 		publicKeyFile  string
 		privateKeyFile string
@@ -22,39 +38,45 @@ var Factory command.FactoryFunc = func() command.Command {
 	options.FlagLong(&publicKeyFile, "public-key-file", 'p', "path to the public key file to create")
 	options.FlagLong(&privateKeyFile, "private-key-file", 'k', "path to the private key file to create")
 
-	return command.Command{
-		Name:        "keygen",
-		Aliases:     []string{"genkey", "generate-key"},
-		Description: "Generates an Ed25519 cryptographic key pair for signing files.",
-		Options:     options,
-		Main: func() int {
-			if publicKeyFile == "" {
-				fmt.Fprintf(os.Stderr, "fatal: missing required flag -p / --public-key-file\n")
-				return 1
-			}
-			if privateKeyFile == "" {
-				fmt.Fprintf(os.Stderr, "fatal: missing required flag -k / --private-key-file\n")
-				return 1
-			}
-			return Main(publicKeyFile, privateKeyFile)
-		},
+	return options, func(ctx context.Context) int {
+		if publicKeyFile == "" {
+			zerolog.Ctx(ctx).
+				Error().
+				Msg("missing required flag -p / --public-key-file")
+			return 1
+		}
+		if privateKeyFile == "" {
+			zerolog.Ctx(ctx).
+				Error().
+				Msg("missing required flag -k / --private-key-file")
+			return 1
+		}
+		return Main(ctx, publicKeyFile, privateKeyFile)
 	}
 }
 
-func Main(publicKeyFile string, privateKeyFile string) int {
+var Factory command.Factory = keygenFactory{}
+
+func Main(ctx context.Context, publicKeyFile string, privateKeyFile string) int {
+	logger := zerolog.Ctx(ctx).
+		With().
+		Str("publicKeyFile", publicKeyFile).
+		Str("privateKeyFile", privateKeyFile).
+		Logger()
+
 	pubKey, privKey, err := ed25519.GenerateKey(nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: failed to generate key: %v\n", err)
+		logger.Error().Err(err).Msg("failed to generate key")
 		return 1
 	}
 
 	seed := privKey.Seed()
 	if err := iohelpers.WriteBase64File(publicKeyFile, pubKey[:], false); err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
+		logger.Error().Err(err).Send()
 		return 1
 	}
 	if err := iohelpers.WriteBase64File(privateKeyFile, seed[:], true); err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
+		logger.Error().Err(err).Send()
 		return 1
 	}
 	return 0

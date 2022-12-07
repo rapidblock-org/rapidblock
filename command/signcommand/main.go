@@ -1,19 +1,31 @@
 package signcommand
 
 import (
+	"context"
 	"crypto/ed25519"
 	"encoding/base64"
-	"fmt"
-	"os"
 
 	getopt "github.com/pborman/getopt/v2"
+	"github.com/rs/zerolog"
 
 	"github.com/chronos-tachyon/rapidblock/command"
 	"github.com/chronos-tachyon/rapidblock/internal/checksum"
 	"github.com/chronos-tachyon/rapidblock/internal/iohelpers"
 )
 
-var Factory command.FactoryFunc = func() command.Command {
+type signFactory struct {
+	command.BaseFactory
+}
+
+func (signFactory) Name() string {
+	return "sign"
+}
+
+func (signFactory) Description() string {
+	return "Signs a file using an Ed25519 private key."
+}
+
+func (signFactory) New(dispatcher command.Dispatcher) (*getopt.Set, command.MainFunc) {
 	var (
 		isText         bool
 		publicKeyFile  string
@@ -30,43 +42,57 @@ var Factory command.FactoryFunc = func() command.Command {
 	options.FlagLong(&dataFile, "data-file", 'd', "path to the data file to sign")
 	options.FlagLong(&signatureFile, "signature-file", 's', "path to the signature file to create")
 
-	return command.Command{
-		Name:        "sign",
-		Description: "Signs a file using an Ed25519 private key.",
-		Options:     options,
-		Main: func() int {
-			if publicKeyFile == "" {
-				fmt.Fprintf(os.Stderr, "fatal: missing required flag -p / --public-key-file\n")
-				return 1
-			}
-			if privateKeyFile == "" {
-				fmt.Fprintf(os.Stderr, "fatal: missing required flag -k / --private-key-file\n")
-				return 1
-			}
-			if dataFile == "" {
-				fmt.Fprintf(os.Stderr, "fatal: missing required flag -d / --data-file\n")
-				return 1
-			}
-			if signatureFile == "" {
-				fmt.Fprintf(os.Stderr, "fatal: missing required flag -s / --signature-file\n")
-				return 1
-			}
-			return Main(isText, publicKeyFile, privateKeyFile, dataFile, signatureFile)
-		},
+	return options, func(ctx context.Context) int {
+		if publicKeyFile == "" {
+			zerolog.Ctx(ctx).
+				Error().
+				Msg("missing required flag -p / --public-key-file")
+			return 1
+		}
+		if privateKeyFile == "" {
+			zerolog.Ctx(ctx).
+				Error().
+				Msg("missing required flag -k / --private-key-file")
+			return 1
+		}
+		if dataFile == "" {
+			zerolog.Ctx(ctx).
+				Error().
+				Msg("missing required flag -d / --data-file")
+			return 1
+		}
+		if signatureFile == "" {
+			zerolog.Ctx(ctx).
+				Error().
+				Msg("missing required flag -s / --signature-file")
+			return 1
+		}
+		return Main(ctx, isText, publicKeyFile, privateKeyFile, dataFile, signatureFile)
 	}
 }
 
-func Main(isText bool, publicKeyFile string, privateKeyFile string, dataFile string, signatureFile string) int {
+var Factory command.Factory = signFactory{}
+
+func Main(ctx context.Context, isText bool, publicKeyFile string, privateKeyFile string, dataFile string, signatureFile string) int {
+	logger := zerolog.Ctx(ctx).
+		With().
+		Str("publicKeyFile", publicKeyFile).
+		Str("privateKeyFile", privateKeyFile).
+		Str("dataFile", dataFile).
+		Str("signatureFile", signatureFile).
+		Bool("isText", isText).
+		Logger()
+
 	raw, err := iohelpers.ReadBase64File(publicKeyFile, ed25519.PublicKeySize)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
+		logger.Error().Err(err).Send()
 		return 1
 	}
 	pubKey := ed25519.PublicKey(raw)
 
 	raw, err = iohelpers.ReadBase64File(privateKeyFile, ed25519.SeedSize)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
+		logger.Error().Err(err).Send()
 		return 1
 	}
 	privKey := ed25519.NewKeyFromSeed(raw)
@@ -75,25 +101,33 @@ func Main(isText bool, publicKeyFile string, privateKeyFile string, dataFile str
 	if !pubKey.Equal(computedPubKey) {
 		str0 := base64.StdEncoding.EncodeToString(computedPubKey[:])
 		str1 := base64.StdEncoding.EncodeToString(pubKey[:])
-		fmt.Fprintf(os.Stderr, "fatal: private key does not match public key!\n\tEd25519 public key calculated from private key: %s\n\tEd25519 public key provided: %s\n", str0, str1)
+		logger.Error().
+			Str("computed", str0).
+			Str("provided", str1).
+			Msg("private key does not match public key!")
 		return 1
 	}
 
 	checksum, err := checksum.File(dataFile, isText)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
+		logger.Error().Err(err).Send()
 		return 1
 	}
 
 	signature := ed25519.Sign(privKey, checksum)
 	if !ed25519.Verify(pubKey, checksum, signature) {
-		fmt.Fprintf(os.Stderr, "fatal: failed to verify signature after creation!\n")
+		str0 := base64.StdEncoding.EncodeToString(checksum)
+		str1 := base64.StdEncoding.EncodeToString(signature)
+		logger.Error().
+			Str("checksum", str0).
+			Str("signature", str1).
+			Msg("failed to verify signature after creation!")
 		return 1
 	}
 
 	err = iohelpers.WriteBase64File(signatureFile, signature, false)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
+		logger.Error().Err(err).Send()
 		return 1
 	}
 	return 0

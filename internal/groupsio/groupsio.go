@@ -2,15 +2,14 @@ package groupsio
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/chronos-tachyon/rapidblock/internal/httpclient"
 )
 
 type List[T any] struct {
@@ -66,11 +65,8 @@ func (value DatabaseValue) AsString() string {
 		return value.Time.Format(time.RFC3339Nano)
 	case LinkType:
 		return value.URL
-
 	default:
-		fmt.Fprintf(os.Stderr, "fatal: %#v is not implemented\n", value.Type)
-		os.Exit(1)
-		return ""
+		panic(fmt.Errorf("%#v not implemented", value.Type))
 	}
 }
 
@@ -91,14 +87,10 @@ func (value DatabaseValue) AsTime() time.Time {
 				return t
 			}
 		}
-		fmt.Fprintf(os.Stderr, "fatal: failed to parse %q as time: %v\n", value.Text, err)
-		os.Exit(1)
-		return time.Time{}
+		panic(fmt.Errorf("failed to parse %q as time: %w", value.Text, err))
 
 	default:
-		fmt.Fprintf(os.Stderr, "fatal: %#v is not implemented\n", value.Type)
-		os.Exit(1)
-		return time.Time{}
+		panic(fmt.Errorf("%#v not implemented", value.Type))
 	}
 }
 
@@ -114,37 +106,39 @@ func (value DatabaseValue) AsBool() bool {
 		str := strings.ToLower(value.Text)
 		switch str {
 		case "":
-			fallthrough
+			return false
 		case "0":
-			fallthrough
+			return false
+		case "off":
+			return false
 		case "n":
-			fallthrough
+			return false
 		case "no":
-			fallthrough
+			return false
 		case "f":
-			fallthrough
+			return false
 		case "false":
 			return false
 
 		case "1":
-			fallthrough
+			return true
+		case "on":
+			return true
 		case "y":
-			fallthrough
+			return true
 		case "yes":
-			fallthrough
+			return true
 		case "t":
-			fallthrough
+			return true
 		case "true":
 			return true
+
+		default:
+			panic(fmt.Errorf("failed to parse %q as bool", str))
 		}
-		fmt.Fprintf(os.Stderr, "fatal: failed to parse %q as bool\n", str)
-		os.Exit(1)
-		return false
 
 	default:
-		fmt.Fprintf(os.Stderr, "fatal: %#v is not implemented\n", value.Type)
-		os.Exit(1)
-		return false
+		panic(fmt.Errorf("%#v not implemented", value.Type))
 	}
 }
 
@@ -155,17 +149,14 @@ func (value DatabaseValue) AsSet(choiceNamesByID map[int]string) map[string]stru
 		for _, choiceID := range value.Choices {
 			choiceName, found := choiceNamesByID[choiceID]
 			if !found {
-				fmt.Fprintf(os.Stderr, "fatal: unknown choice ID %d\n", choiceID)
-				os.Exit(1)
+				panic(fmt.Errorf("unknown choice ID %d", choiceID))
 			}
 			set[choiceName] = struct{}{}
 		}
 		return set
 
 	default:
-		fmt.Fprintf(os.Stderr, "fatal: %#v is not implemented\n", value.Type)
-		os.Exit(1)
-		return nil
+		panic(fmt.Errorf("%#v not implemented", value.Type))
 	}
 }
 
@@ -174,64 +165,38 @@ func ForEach[T any](
 	client *http.Client,
 	baseURL *url.URL,
 	baseQuery url.Values,
-	reqfn func(*http.Request),
+	reqFn func(*http.Request),
 	itemfn func(T) error,
 ) error {
-	u := *baseURL
 	q := make(url.Values, 1+len(baseQuery))
 	for k, v := range baseQuery {
 		q[k] = v
 	}
+
+	u := *baseURL
 	u.RawQuery = q.Encode()
-	urlstr := u.String()
-
-	for {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlstr, http.NoBody)
-		if err != nil {
-			return fmt.Errorf("%s: %s: failed to create request: %w", http.MethodGet, urlstr, err)
-		}
-
-		reqfn(req)
-
-		resp, err := client.Do(req)
-		if err != nil {
-			return fmt.Errorf("%s: %s: request failed: %w", http.MethodGet, urlstr, err)
-		}
-
-		rawBody, err := io.ReadAll(resp.Body)
-		if err != nil {
-			_ = resp.Body.Close()
-			return fmt.Errorf("%s: %s: I/O error in response body: %w", http.MethodGet, urlstr, err)
-		}
-
-		err = resp.Body.Close()
-		if err != nil {
-			return fmt.Errorf("%s: %s: I/O error in response body: %w", http.MethodGet, urlstr, err)
-		}
-
-		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("%s: %s: unexpected status %03d", http.MethodGet, urlstr, resp.StatusCode)
-		}
-
+	looping := true
+	for looping {
 		var list List[T]
-		err = json.Unmarshal(rawBody, &list)
+		err := httpclient.Do(ctx, client, http.MethodGet, &u, http.NoBody, reqFn, isOK, &list)
 		if err != nil {
-			return fmt.Errorf("%s: %s: failed to decode response body as JSON: %w", http.MethodGet, urlstr, err)
+			return err
 		}
 
 		for _, item := range list.Data {
 			err = itemfn(item)
 			if err != nil {
-				return fmt.Errorf("%s: %s: %w", http.MethodGet, urlstr, err)
+				return err
 			}
-		}
-
-		if !list.HasMore {
-			return nil
 		}
 
 		q.Set("page_token", fmt.Sprint(list.NextPageToken))
 		u.RawQuery = q.Encode()
-		urlstr = u.String()
+		looping = list.HasMore
 	}
+	return nil
+}
+
+func isOK(code int) bool {
+	return code == http.StatusOK
 }

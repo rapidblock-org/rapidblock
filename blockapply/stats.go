@@ -2,8 +2,8 @@ package blockapply
 
 import (
 	"bytes"
-	"fmt"
 	"io"
+	"strconv"
 )
 
 type Stats struct {
@@ -16,13 +16,22 @@ func (stats Stats) WriteTo(serverName string, w io.Writer) (int, error) {
 	var buf bytes.Buffer
 	buf.Grow(256)
 	if stats.InsertCount > 0 {
-		fmt.Fprintf(&buf, "%s: added %d new block(s)\n", serverName, stats.InsertCount)
+		buf.WriteString(serverName)
+		buf.WriteString(": added ")
+		buf.WriteString(strconv.FormatUint(uint64(stats.InsertCount), 10))
+		buf.WriteString(" new block(s)\n")
 	}
 	if stats.UpdateCount > 0 {
-		fmt.Fprintf(&buf, "%s: modified %d existing block(s)\n", serverName, stats.UpdateCount)
+		buf.WriteString(serverName)
+		buf.WriteString(": modified ")
+		buf.WriteString(strconv.FormatUint(uint64(stats.UpdateCount), 10))
+		buf.WriteString(" existing block(s)\n")
 	}
 	if stats.DeleteCount > 0 {
-		fmt.Fprintf(&buf, "%s: deleted %d existing block(s) that are now remediated\n", serverName, stats.DeleteCount)
+		buf.WriteString(serverName)
+		buf.WriteString(": deleted ")
+		buf.WriteString(strconv.FormatUint(uint64(stats.DeleteCount), 10))
+		buf.WriteString(" existing block(s)\n")
 	}
 	return w.Write(buf.Bytes())
 }

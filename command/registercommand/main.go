@@ -9,11 +9,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"os/exec"
 	"strings"
 
 	getopt "github.com/pborman/getopt/v2"
+	"github.com/rs/zerolog"
 
 	"github.com/chronos-tachyon/rapidblock/command"
 	"github.com/chronos-tachyon/rapidblock/internal/appversion"
@@ -30,7 +30,19 @@ const (
 	OAuthScopes = "admin:read admin:write"
 )
 
-var Factory command.FactoryFunc = func() command.Command {
+type registerFactory struct {
+	command.BaseFactory
+}
+
+func (registerFactory) Name() string {
+	return "register"
+}
+
+func (registerFactory) Description() string {
+	return "Registers as an app with the given Mastodon instance, yielding a client token for \"rapidblock apply\"."
+}
+
+func (registerFactory) New(dispatcher command.Dispatcher) (*getopt.Set, command.MainFunc) {
 	var baseURL string
 	var launchBrowser bool
 
@@ -39,37 +51,58 @@ var Factory command.FactoryFunc = func() command.Command {
 	options.FlagLong(&baseURL, "url", 'u', "URL to the Mastodon instance to register with")
 	options.FlagLong(&launchBrowser, "launch-browser", 'x', "launch a web browser using xdg-open?")
 
-	return command.Command{
-		Name:        "register",
-		Description: "Registers as an app with the given Mastodon instance, yielding a client token for \"rapidblock apply\".",
-		Options:     options,
-		Main: func() int {
-			if baseURL == "" {
-				fmt.Fprintf(os.Stderr, "fatal: missing required flag -u / --url\n")
-				return 1
-			}
-			return Main(launchBrowser, baseURL)
-		},
+	return options, func(ctx context.Context) int {
+		if baseURL == "" {
+			zerolog.Ctx(ctx).
+				Error().
+				Msg("missing required flag -u / --url")
+			return 1
+		}
+		return Main(
+			ctx,
+			launchBrowser,
+			baseURL,
+			dispatcher.Stdin(),
+			dispatcher.Stdout(),
+			dispatcher.Stderr(),
+		)
 	}
 }
 
-func Main(launchBrowser bool, baseURL string) int {
+var Factory command.Factory = registerFactory{}
+
+func Main(
+	ctx context.Context,
+	launchBrowser bool,
+	baseURL string,
+	stdin io.Reader,
+	stdout io.Writer,
+	stderr io.Writer,
+) int {
+	logger := zerolog.Ctx(ctx).
+		With().
+		Bool("launchBrowser", launchBrowser).
+		Str("baseURL", baseURL).
+		Logger()
+
 	u, err := url.Parse(baseURL)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
+		logger.Error().Err(err).Send()
 		return 1
 	}
 
 	if !strings.EqualFold(u.Scheme, "http") && !strings.EqualFold(u.Scheme, "https") {
-		fmt.Fprintf(os.Stderr, "fatal: only \"http\" and \"https\" schemes are supported, not %q\n", u.Scheme)
+		logger.Error().
+			Str("scheme", u.Scheme).
+			Msg("only \"http\" and \"https\" schemes are supported")
 		return 1
 	}
 	if u.User != nil {
-		fmt.Fprintf(os.Stderr, "fatal: found username/password information in the URL, which is not permitted\n\turl = %q\n", u.Redacted())
+		logger.Error().
+			Msg("found username/password information in the URL, which is not permitted")
 		return 1
 	}
 
-	ctx := context.Background()
 	c := httpclient.Client(httpclient.Transport())
 
 	reqMethod := http.MethodPost
@@ -84,7 +117,11 @@ func Main(launchBrowser bool, baseURL string) int {
 
 	req, err := http.NewRequestWithContext(ctx, reqMethod, reqURL, reqBody)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: failed to create HTTP request: %q, %q: %v\n", reqMethod, reqURL, err)
+		logger.Error().
+			Str("method", reqMethod).
+			Str("url", reqURL).
+			Err(err).
+			Msg("failed to create HTTP request")
 		return 1
 	}
 
@@ -95,7 +132,11 @@ func Main(launchBrowser bool, baseURL string) int {
 
 	resp, err := c.Do(req)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: HTTP request failed: %q, %q: %v\n", reqMethod, reqURL, err)
+		logger.Error().
+			Str("method", reqMethod).
+			Str("url", reqURL).
+			Err(err).
+			Msg("HTTP request failed")
 		return 1
 	}
 
@@ -105,12 +146,21 @@ func Main(launchBrowser bool, baseURL string) int {
 		err = err2
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: I/O error while receiving HTTP response: %q, %q, %03d: %v\n", reqMethod, reqURL, respStatus, err)
+		logger.Error().
+			Str("method", reqMethod).
+			Str("url", reqURL).
+			Int("statusCode", respStatus).
+			Err(err).
+			Msg("I/O error while receiving HTTP response")
 		return 1
 	}
 	if respStatus != http.StatusOK {
-		fmt.Fprintf(os.Stderr, "fatal: server returned unexpected HTTP status code %03d\n", respStatus)
-		httpclient.WriteDebug(os.Stderr, resp.Header, respBody)
+		logger.Error().
+			Str("method", reqMethod).
+			Str("url", reqURL).
+			Int("statusCode", respStatus).
+			Msg("server returned unexpected HTTP status code")
+		httpclient.WriteDebug(stderr, resp.Header, respBody)
 		return 1
 	}
 
@@ -119,8 +169,13 @@ func Main(launchBrowser bool, baseURL string) int {
 	d.UseNumber()
 	err = d.Decode(&arr)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: failed to parse HTTP response body as JSON: %v\n", err)
-		httpclient.WriteDebug(os.Stderr, resp.Header, respBody)
+		logger.Error().
+			Str("method", reqMethod).
+			Str("url", reqURL).
+			Int("statusCode", respStatus).
+			Err(err).
+			Msg("failed to parse HTTP response body as JSON")
+		httpclient.WriteDebug(stderr, resp.Header, respBody)
 		return 1
 	}
 
@@ -131,23 +186,45 @@ func Main(launchBrowser bool, baseURL string) int {
 	q.Set("redirect_uri", OAuthRedirectURL)
 	q.Set("response_type", "code")
 	browseURL.RawQuery = q.Encode()
-	fmt.Printf("%s\n", browseURL.String())
+	browseURLString := browseURL.String()
+
+	_, err = io.WriteString(stdout, fmt.Sprintf("%s\n", browseURLString))
+	if err != nil {
+		logger.Error().
+			Err(err).
+			Msg("I/O error while writing to stdout")
+		return 1
+	}
+
 	if launchBrowser {
 		//nolint:gosec
-		cmd := exec.CommandContext(ctx, "xdg-open", browseURL.String())
+		cmd := exec.CommandContext(ctx, "xdg-open", browseURLString)
 		err = cmd.Run()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "warn: failed to launch web browser: %q: %v\n", cmd.Args, err)
+			logger.Warn().
+				Strs("args", cmd.Args).
+				Err(err).
+				Msg("failed to launch web browser")
 		}
 	}
 
-	os.Stdout.Write([]byte("Code: "))
-	stdin := bufio.NewReader(os.Stdin)
-	line, err := stdin.ReadString('\n')
-	if err != nil && err != io.EOF {
-		fmt.Fprintf(os.Stderr, "fatal: failed to read code from stdin: %v\n", err)
+	_, err = io.WriteString(stdout, "Code: ")
+	if err != nil {
+		logger.Error().
+			Err(err).
+			Msg("I/O error while writing to stdout")
 		return 1
 	}
+
+	stdinBuffered := bufio.NewReader(stdin)
+	line, err := stdinBuffered.ReadString('\n')
+	if err != nil && err != io.EOF {
+		logger.Error().
+			Err(err).
+			Msg("I/O error while reading from stdin")
+		return 1
+	}
+
 	oauthCode := strings.TrimSpace(line)
 
 	reqMethod = http.MethodPost
@@ -164,7 +241,11 @@ func Main(launchBrowser bool, baseURL string) int {
 
 	req, err = http.NewRequestWithContext(ctx, reqMethod, reqURL, reqBody)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: failed to create HTTP request: %q, %q: %v\n", reqMethod, reqURL, err)
+		logger.Error().
+			Str("method", reqMethod).
+			Str("url", reqURL).
+			Err(err).
+			Msg("failed to create HTTP request")
 		return 1
 	}
 
@@ -175,7 +256,11 @@ func Main(launchBrowser bool, baseURL string) int {
 
 	resp, err = c.Do(req)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: HTTP request failed: %q, %q: %v\n", reqMethod, reqURL, err)
+		logger.Error().
+			Str("method", reqMethod).
+			Str("url", reqURL).
+			Err(err).
+			Msg("HTTP request failed")
 		return 1
 	}
 
@@ -185,12 +270,21 @@ func Main(launchBrowser bool, baseURL string) int {
 		err = err2
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: I/O error while receiving HTTP response: %q, %q, %03d: %v\n", reqMethod, reqURL, respStatus, err)
+		logger.Error().
+			Str("method", reqMethod).
+			Str("url", reqURL).
+			Int("statusCode", respStatus).
+			Err(err).
+			Msg("I/O error while receiving HTTP response")
 		return 1
 	}
 	if respStatus != http.StatusOK {
-		fmt.Fprintf(os.Stderr, "fatal: server returned unexpected HTTP status code %03d\n", respStatus)
-		httpclient.WriteDebug(os.Stderr, resp.Header, respBody)
+		logger.Error().
+			Str("method", reqMethod).
+			Str("url", reqURL).
+			Int("statusCode", respStatus).
+			Msg("server returned unexpected HTTP status code")
+		httpclient.WriteDebug(stderr, resp.Header, respBody)
 		return 1
 	}
 
@@ -199,18 +293,44 @@ func Main(launchBrowser bool, baseURL string) int {
 	d.UseNumber()
 	err = d.Decode(&otr)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: failed to parse HTTP response body as JSON: %v\n", err)
-		httpclient.WriteDebug(os.Stderr, resp.Header, respBody)
+		logger.Error().
+			Str("method", reqMethod).
+			Str("url", reqURL).
+			Int("statusCode", respStatus).
+			Err(err).
+			Msg("failed to parse HTTP response body as JSON")
+		httpclient.WriteDebug(stderr, resp.Header, respBody)
 		return 1
 	}
 
 	if otr.TokenType != "Bearer" {
-		fmt.Fprintf(os.Stdout, "fatal: don't know about token_type %q\n", otr.TokenType)
-		httpclient.WriteDebug(os.Stderr, resp.Header, respBody)
+		logger.Error().
+			Str("method", reqMethod).
+			Str("url", reqURL).
+			Int("statusCode", respStatus).
+			Str("tokenType", otr.TokenType).
+			Msg("unknown token type; only \"Bearer\" is supported")
+		httpclient.WriteDebug(stderr, resp.Header, respBody)
 		return 1
 	}
 
-	fmt.Fprintf(os.Stdout, "app_id: %d\nclient_id: %s\nclient_secret: %s\nclient_token: %s\nclient_token_type: %s\n", arr.ID, arr.ClientID, arr.ClientSecret, otr.AccessToken, otr.TokenType)
+	_, err = io.WriteString(
+		stdout,
+		fmt.Sprintf(
+			"app_id: %d\nclient_id: %s\nclient_secret: %s\nclient_token: %s\nclient_token_type: %s\n",
+			arr.ID,
+			arr.ClientID,
+			arr.ClientSecret,
+			otr.AccessToken,
+			otr.TokenType,
+		),
+	)
+	if err != nil {
+		logger.Error().
+			Err(err).
+			Msg("I/O error while writing to stdout")
+		return 1
+	}
 	return 0
 }
 

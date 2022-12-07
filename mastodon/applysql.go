@@ -10,72 +10,21 @@ import (
 	"github.com/chronos-tachyon/rapidblock/blockfile"
 )
 
-const (
-	serverAccountID       = -99
-	adminActionCreate     = "create"
-	adminActionUpdate     = "update"
-	adminActionDestroy    = "destroy"
-	targetTypeDomainBlock = "DomainBlock"
-)
-
-const sqlSelectDomainBlocks = `
-SELECT
-	id, domain, private_comment, public_comment, created_at, updated_at, severity, reject_media, reject_reports, obfuscate
-FROM public.domain_blocks
-`
-
-const sqlInsertDomainBlocks = `
-INSERT INTO public.domain_blocks
-	(domain, private_comment, public_comment, created_at, updated_at, severity, reject_media, reject_reports, obfuscate)
-VALUES
-	($1, $2, $3, $4, $5, $6, $7, $8, $9)
-RETURNING id
-`
-
-const sqlUpdateDomainBlocks = `
-UPDATE public.domain_blocks
-SET
-	private_comment = $2,
-	public_comment = $3,
-	updated_at = $4,
-	severity = $5,
-	reject_media = $6,
-	reject_reports = $7,
-	obfuscate = $8
-WHERE
-	id = $1
-`
-
-const sqlDeleteDomainBlocks = `
-DELETE FROM public.domain_blocks WHERE id = $1
-`
-
-const sqlInsertAdminActionLog3x = `
-INSERT INTO public.admin_action_logs
-	(created_at, updated_at, account_id, action, target_type, target_id, recorded_changes)
-VALUES
-	($1, $2, $3, $4, $5, $6, $7)
-`
-
-const sqlInsertAdminActionLog4x = `
-INSERT INTO public.admin_action_logs
-	(created_at, updated_at, account_id, action, target_type, target_id, human_identifier, route_param, permalink)
-VALUES
-	($1, $2, $3, $4, $5, $6, $7, $8, $9)
-`
+func init() {
+	blockapply.SetFunc(blockapply.ModeMastodon3xSQL, ApplySQL)
+	blockapply.SetFunc(blockapply.ModeMastodon4xSQL, ApplySQL)
+}
 
 func ApplySQL(ctx context.Context, server blockapply.Server, file blockfile.BlockFile) (stats blockapply.Stats, err error) {
 	conn, err := pgx.Connect(ctx, server.URI)
 	if err != nil {
-		err = fmt.Errorf("failed to connect to PostgreSQL: %w", err)
-		return
+		return stats, fmt.Errorf("failed to connect to PostgreSQL: %w", err)
 	}
 	defer conn.Close(ctx)
 
 	tx, err := conn.Begin(ctx)
 	if err != nil {
-		err = fmt.Errorf("failed to Begin transaction: %w", err)
-		return
+		return stats, fmt.Errorf("failed to Begin transaction: %w", err)
 	}
 	defer func() {
 		_ = tx.Rollback(ctx)
@@ -85,14 +34,14 @@ func ApplySQL(ctx context.Context, server blockapply.Server, file blockfile.Bloc
 
 	stats, err = Apply(ctx, applier, file)
 	if err != nil {
-		return
+		return stats, err
 	}
 
 	err = tx.Commit(ctx)
 	if err != nil {
-		err = fmt.Errorf("failed to Commit transaction: %w", err)
+		return stats, fmt.Errorf("failed to Commit transaction: %w", err)
 	}
-	return
+	return stats, nil
 }
 
 type SQLApplier struct {
@@ -281,7 +230,56 @@ func (applier *SQLApplier) Delete(ctx context.Context, block DomainBlock) error 
 
 var _ Applier = (*SQLApplier)(nil)
 
-func init() {
-	blockapply.SetFunc(blockapply.ModeMastodon3xSQL, ApplySQL)
-	blockapply.SetFunc(blockapply.ModeMastodon4xSQL, ApplySQL)
-}
+const (
+	serverAccountID       = -99
+	adminActionCreate     = "create"
+	adminActionUpdate     = "update"
+	adminActionDestroy    = "destroy"
+	targetTypeDomainBlock = "DomainBlock"
+)
+
+const sqlSelectDomainBlocks = `
+SELECT
+	id, domain, private_comment, public_comment, created_at, updated_at, severity, reject_media, reject_reports, obfuscate
+FROM public.domain_blocks
+`
+
+const sqlInsertDomainBlocks = `
+INSERT INTO public.domain_blocks
+	(domain, private_comment, public_comment, created_at, updated_at, severity, reject_media, reject_reports, obfuscate)
+VALUES
+	($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id
+`
+
+const sqlUpdateDomainBlocks = `
+UPDATE public.domain_blocks
+SET
+	private_comment = $2,
+	public_comment = $3,
+	updated_at = $4,
+	severity = $5,
+	reject_media = $6,
+	reject_reports = $7,
+	obfuscate = $8
+WHERE
+	id = $1
+`
+
+const sqlDeleteDomainBlocks = `
+DELETE FROM public.domain_blocks WHERE id = $1
+`
+
+const sqlInsertAdminActionLog3x = `
+INSERT INTO public.admin_action_logs
+	(created_at, updated_at, account_id, action, target_type, target_id, recorded_changes)
+VALUES
+	($1, $2, $3, $4, $5, $6, $7)
+`
+
+const sqlInsertAdminActionLog4x = `
+INSERT INTO public.admin_action_logs
+	(created_at, updated_at, account_id, action, target_type, target_id, human_identifier, route_param, permalink)
+VALUES
+	($1, $2, $3, $4, $5, $6, $7, $8, $9)
+`

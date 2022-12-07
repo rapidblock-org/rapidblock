@@ -2,10 +2,10 @@ package applycommand
 
 import (
 	"context"
-	"fmt"
-	"os"
+	"io"
 
 	getopt "github.com/pborman/getopt/v2"
+	"github.com/rs/zerolog"
 
 	"github.com/chronos-tachyon/rapidblock/blockapply"
 	"github.com/chronos-tachyon/rapidblock/blockfile"
@@ -13,7 +13,19 @@ import (
 	"github.com/chronos-tachyon/rapidblock/internal/iohelpers"
 )
 
-var Factory command.FactoryFunc = func() command.Command {
+type applyFactory struct {
+	command.BaseFactory
+}
+
+func (applyFactory) Name() string {
+	return "apply"
+}
+
+func (applyFactory) Description() string {
+	return "Applies the given RapidBlock blocklist file to configured instances."
+}
+
+func (applyFactory) New(dispatcher command.Dispatcher) (*getopt.Set, command.MainFunc) {
 	var (
 		configFile string
 		dataFile   string
@@ -24,48 +36,54 @@ var Factory command.FactoryFunc = func() command.Command {
 	options.FlagLong(&configFile, "config-file", 'c', "JSON/YAML config that lists the Fediverse servers to connect to")
 	options.FlagLong(&dataFile, "data-file", 'd', "path to the JSON file to apply")
 
-	return command.Command{
-		Name:        "apply",
-		Description: "Applies the given RapidBlock blocklist file to configured instances.",
-		Options:     options,
-		Main: func() int {
-			if configFile == "" {
-				fmt.Fprintf(os.Stderr, "fatal: missing required flag -c / --config-file\n")
-				return 1
-			}
-			if dataFile == "" {
-				fmt.Fprintf(os.Stderr, "fatal: missing required flag -d / --data-file\n")
-				return 1
-			}
-			return Main(configFile, dataFile)
-		},
+	return options, func(ctx context.Context) int {
+		if configFile == "" {
+			zerolog.Ctx(ctx).
+				Error().
+				Msg("missing required flag -c / --config-file")
+			return 1
+		}
+		if dataFile == "" {
+			zerolog.Ctx(ctx).
+				Error().
+				Msg("missing required flag -d / --data-file")
+			return 1
+		}
+		return Main(ctx, configFile, dataFile, dispatcher.Stdout())
 	}
 }
 
-func Main(configFile string, dataFile string) int {
+var Factory command.Factory = applyFactory{}
+
+func Main(ctx context.Context, configFile string, dataFile string, stdout io.Writer) int {
+	logger := zerolog.Ctx(ctx).
+		With().
+		Str("configFile", configFile).
+		Str("dataFile", dataFile).
+		Logger()
+
 	var config blockapply.Config
 	err := iohelpers.Load(&config, configFile, true)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
+		logger.Error().Err(err).Send()
 		return 1
 	}
 
 	var file blockfile.BlockFile
 	err = iohelpers.Load(&file, dataFile, true)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
+		logger.Error().Err(err).Send()
 		return 1
 	}
 
-	ctx := context.Background()
 	for _, server := range config.Servers {
 		fn := server.Mode.Func()
 		stats, err := fn(ctx, server, file)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "fatal: %s: %v\n", server.Name, err)
+			logger.Error().Str("serverName", server.Name).Err(err).Send()
 			return 1
 		}
-		_, _ = stats.WriteTo(server.Name, os.Stdout)
+		_, _ = stats.WriteTo(server.Name, stdout)
 	}
 	return 0
 }

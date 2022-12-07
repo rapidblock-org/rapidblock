@@ -25,10 +25,14 @@ func MakeNullString(valid bool, str string) NullString {
 }
 
 func (ns NullString) GoString() string {
-	if ns.IsValid {
-		return strconv.Quote(ns.StringValue)
-	}
-	return "nil"
+	var buf bytes.Buffer
+	buf.Grow(32 + len(ns.StringValue))
+	buf.WriteString("mastodon.NullString{")
+	buf.WriteString(strconv.FormatBool(ns.IsValid))
+	buf.WriteString(", ")
+	buf.WriteString(strconv.Quote(ns.StringValue))
+	buf.WriteString("}")
+	return buf.String()
 }
 
 func (ns NullString) String() string {
@@ -104,6 +108,8 @@ func (ns *NullString) Scan(value any) error {
 }
 
 var (
+	_ fmt.GoStringer   = NullString{}
+	_ fmt.Stringer     = NullString{}
 	_ json.Marshaler   = NullString{}
 	_ json.Unmarshaler = (*NullString)(nil)
 	_ driver.Valuer    = NullString{}

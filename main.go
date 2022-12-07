@@ -1,22 +1,25 @@
 package main
 
 import (
-	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
+	"time"
 
-	getopt "github.com/pborman/getopt/v2"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 
 	"github.com/chronos-tachyon/rapidblock/command"
 	"github.com/chronos-tachyon/rapidblock/command/applycommand"
 	"github.com/chronos-tachyon/rapidblock/command/exportcommand"
+	"github.com/chronos-tachyon/rapidblock/command/helpcommand"
 	"github.com/chronos-tachyon/rapidblock/command/keygencommand"
 	"github.com/chronos-tachyon/rapidblock/command/preparecommand"
 	"github.com/chronos-tachyon/rapidblock/command/registercommand"
 	"github.com/chronos-tachyon/rapidblock/command/signcommand"
 	"github.com/chronos-tachyon/rapidblock/command/verifycommand"
+	"github.com/chronos-tachyon/rapidblock/command/versioncommand"
 	"github.com/chronos-tachyon/rapidblock/internal/appversion"
 
 	_ "github.com/chronos-tachyon/rapidblock/mastodon"
@@ -29,212 +32,97 @@ var (
 	TreeState  = ""
 )
 
-var (
-	ProgramName string
-	CommandList []command.Command
-	CommandMap  map[string]command.Command
-)
-
 func main() {
 	appversion.Version = Version
 	appversion.Commit = Commit
 	appversion.CommitDate = CommitDate
 	appversion.TreeState = TreeState
 
-	ProgramName = "rapidblock"
-	osArgs := os.Args
-	n := len(osArgs)
-	switch {
-	case n <= 0:
-		osArgs = make([]string, 1)
-		osArgs[0] = ProgramName
-	default:
-		ProgramName = filepath.Base(osArgs[0])
-	}
-
-	var (
-		flagHelp       bool
-		flagVersion    bool
-		hasCommandName bool
-		commandName    string
+	dispatcher := command.MakeDispatcher(
+		"rapidblock",
+		helpcommand.Factory,
+		versioncommand.Factory,
+		keygencommand.Factory,
+		preparecommand.Factory,
+		exportcommand.Factory,
+		signcommand.Factory,
+		verifycommand.Factory,
+		registercommand.Factory,
+		applycommand.Factory,
 	)
-	argv := make([]string, 0, n)
-	argv = append(argv, ProgramName)
 
-	for _, arg := range osArgs[1:] {
-		switch {
-		case arg == "-h" || arg == "--help":
-			flagHelp = true
-		case arg == "-V" || arg == "--version":
-			flagVersion = true
-		case hasCommandName:
-			argv = append(argv, arg)
-		case arg != "" && arg[0] == '-':
-			argv = append(argv, arg)
-		default:
-			commandName = arg
-			hasCommandName = true
+	var logWriter io.Writer
+
+	switch logOutput := os.Getenv("LOG_OUTPUT"); logOutput {
+	case "":
+		fallthrough
+	case "stderr":
+		logWriter = os.Stderr
+	case "stdout":
+		logWriter = os.Stdout
+	default:
+		f, err := os.OpenFile(logOutput, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o666)
+		if err != nil {
+			panic(fmt.Errorf("failed to open log file: %q: %w", logOutput, err))
 		}
+		defer func() {
+			_ = f.Sync()
+			_ = f.Close()
+		}()
+		logWriter = f
 	}
 
-	if flagVersion {
-		hasCommandName = true
-		commandName = "version"
-		argv = argv[:1]
-	}
-
-	if flagHelp && !hasCommandName {
-		Must1(PrintHelp(os.Stdout))
-		return
-	}
-
-	if commandName == "" {
-		Must1(PrintHelp(os.Stderr))
-		os.Exit(1)
-		return
-	}
-
-	c := LookupCommand(commandName)
-	if flagHelp {
-		Must1(PrintHelpForCommand(os.Stdout, commandName, c))
-		return
-	}
-	argv[0] = fmt.Sprint(ProgramName, " ", commandName)
-	c.Options.Parse(argv)
-	os.Exit(c.Main())
-}
-
-func LookupCommand(commandName string) command.Command {
-	c, found := CommandMap[commandName]
-	if !found {
-		fmt.Fprintf(os.Stderr, "fatal: unknown subcommand %q\n", commandName)
-		os.Exit(1)
-	}
-	return c
-}
-
-var HelpFactory command.FactoryFunc = func() command.Command {
-	options := getopt.New()
-	options.SetParameters("[<subcommand>]")
-
-	return command.Command{
-		Name:        "help",
-		Description: "Print program usage information.",
-		Options:     options,
-		Main: func() int {
-			n := options.NArgs()
-			switch {
-			case n <= 0:
-				Must1(PrintHelp(os.Stdout))
-				return 0
-			case n == 1:
-				commandName := options.Arg(0)
-				c := LookupCommand(commandName)
-				Must1(PrintHelpForCommand(os.Stdout, commandName, c))
-				return 0
-			default:
-				fmt.Fprintf(os.Stderr, "fatal: found %d unexpected positional arguments\n", n-1)
-				return 1
-			}
-		},
-	}
-}
-
-var VersionFactory command.FactoryFunc = func() command.Command {
-	options := getopt.New()
-	options.SetParameters("")
-
-	return command.Command{
-		Name:        "version",
-		Description: "Print program version information.",
-		Options:     options,
-		Main: func() int {
-			appversion.Print(os.Stdout)
-			return 0
-		},
-	}
-}
-
-func PrintHelp(w io.Writer) (int, error) {
-	var buf bytes.Buffer
-	buf.Grow(256)
-
-	var maxWidth uint
-	for _, item := range CommandList {
-		nameLen := uint(len(item.Name))
-		if maxWidth < nameLen {
-			maxWidth = nameLen
+	switch logFormat := os.Getenv("LOG_FORMAT"); logFormat {
+	case "":
+		fallthrough
+	case "console":
+		logWriter = zerolog.ConsoleWriter{
+			Out:        logWriter,
+			TimeFormat: "2006-01-02T15:04:05.999Z07:00",
 		}
-	}
-	maxWidth += (maxWidth & 1)
-
-	buf.WriteString("Tool for managing syndicated domain blocks on Fediverse instances.\n")
-	buf.WriteString("Usage: ")
-	buf.WriteString(ProgramName)
-	buf.WriteString(" <subcommand> [<flags>]\n")
-	buf.WriteString("\n")
-	buf.WriteString("Subcommands:\n")
-	for _, item := range CommandList {
-		name := item.Name
-		desc := item.Description
-		if desc == "" {
-			desc = "(no description)"
+	case "console-plain":
+		logWriter = zerolog.ConsoleWriter{
+			Out:        logWriter,
+			TimeFormat: "2006-01-02T15:04:05.999Z07:00",
+			NoColor:    true,
 		}
-
-		buf.WriteString("  ")
-		n := uint(len(name))
-		for n < maxWidth {
-			buf.WriteByte(' ')
-			n++
-		}
-		buf.WriteString(name)
-		buf.WriteString("  ")
-		buf.WriteString(desc)
-		buf.WriteByte('\n')
-	}
-	buf.WriteString("\n")
-	buf.WriteString("Use \"rapidblock <subcommand> --help\" for help on individual subcommands.\n")
-	return w.Write(buf.Bytes())
-}
-
-func PrintHelpForCommand(w io.Writer, commandName string, c command.Command) (int, error) {
-	var buf bytes.Buffer
-	buf.Grow(1 << 10) // 1 KiB
-	if c.Description != "" {
-		fmt.Fprintf(&buf, "%s\n", c.Description)
-	}
-	c.Options.SetProgram(fmt.Sprint(ProgramName, " ", commandName))
-	c.Options.PrintUsage(&buf)
-	return w.Write(buf.Bytes())
-}
-
-func Must1[T0 any](arg0 T0, err error) T0 {
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: %v\n", err)
-		os.Exit(1)
-		panic(nil)
-	}
-	return arg0
-}
-
-func init() {
-	CommandList = []command.Command{
-		HelpFactory.New(),
-		VersionFactory.New(),
-		keygencommand.Factory.New(),
-		preparecommand.Factory.New(),
-		exportcommand.Factory.New(),
-		signcommand.Factory.New(),
-		verifycommand.Factory.New(),
-		registercommand.Factory.New(),
-		applycommand.Factory.New(),
+	case "raw":
+		// pass
+	case "cbor":
+		// pass
+	case "json":
+		// pass
+	default:
+		panic(fmt.Errorf("unknown log format %q, must be one of \"console\" or \"json\"", logFormat))
 	}
 
-	CommandMap = make(map[string]command.Command, len(CommandList))
-	for _, item := range CommandList {
-		CommandMap[item.Name] = item
-		for _, alias := range item.Aliases {
-			CommandMap[alias] = item
-		}
+	switch logLevel := os.Getenv("LOG_LEVEL"); logLevel {
+	case "trace":
+		zerolog.SetGlobalLevel(zerolog.TraceLevel)
+	case "debug":
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	case "":
+		fallthrough
+	case "info":
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	case "warn":
+		fallthrough
+	case "warning":
+		zerolog.SetGlobalLevel(zerolog.WarnLevel)
+	case "err":
+		fallthrough
+	case "error":
+		zerolog.SetGlobalLevel(zerolog.ErrorLevel)
+	default:
+		panic(fmt.Errorf("unknown log level %q, must be one of \"debug\", \"info\", \"warn\", \"error\"", logLevel))
 	}
+
+	log.Logger = zerolog.New(logWriter).With().Timestamp().Logger()
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+	zerolog.DurationFieldUnit = time.Second
+	zerolog.DurationFieldInteger = false
+	zerolog.DefaultContextLogger = &log.Logger
+
+	ctx := context.Background()
+	os.Exit(dispatcher.Main(ctx, os.Args))
 }

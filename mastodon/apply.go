@@ -22,8 +22,7 @@ func Apply(ctx context.Context, dba Applier, file blockfile.BlockFile) (stats bl
 	existingBlocks := make(map[string]DomainBlock, 1024)
 	err = dba.Query(ctx, existingBlocks)
 	if err != nil {
-		err = fmt.Errorf("failed to query the existing domain blocks: %w", err)
-		return
+		return stats, fmt.Errorf("failed to query the existing domain blocks: %w", err)
 	}
 
 	now := time.Now().UTC()
@@ -64,27 +63,24 @@ func Apply(ctx context.Context, dba Applier, file blockfile.BlockFile) (stats bl
 		case block.IsBlocked && hasExisting:
 			err = dba.Update(ctx, goal)
 			if err != nil {
-				err = fmt.Errorf("failed to update existing domain block: %q: %w", domain, err)
-				return
+				return stats, fmt.Errorf("failed to update existing domain block: %q: %w", domain, err)
 			}
 			stats.UpdateCount++
 
 		case block.IsBlocked:
 			err = dba.Insert(ctx, goal)
 			if err != nil {
-				err = fmt.Errorf("failed to insert new domain block: %q: %w", domain, err)
-				return
+				return stats, fmt.Errorf("failed to insert new domain block: %q: %w", domain, err)
 			}
 			stats.InsertCount++
 
 		case hasExisting:
 			err = dba.Delete(ctx, goal)
 			if err != nil {
-				err = fmt.Errorf("failed to delete existing domain block: %q: %w", domain, err)
-				return
+				return stats, fmt.Errorf("failed to delete existing domain block: %q: %w", domain, err)
 			}
 			stats.DeleteCount++
 		}
 	}
-	return
+	return stats, nil
 }
