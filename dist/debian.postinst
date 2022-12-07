@@ -1,0 +1,4 @@
+#! /bin/sh
+set -e
+chown mastodon:mastodon /etc/rapidblock/config.yaml
+chmod 0600 /etc/rapidblock/config.yaml

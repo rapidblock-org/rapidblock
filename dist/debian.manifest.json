@@ -1,0 +1,49 @@
+[
+  {
+    "source": "dist",
+    "dist_file": "cron.crontab",
+    "target": "/etc/cron.d/rapidblock",
+    "is_config": true
+  },
+  {
+    "source": "dist",
+    "dist_file": "cron.default",
+    "target": "/etc/default/rapidblock",
+    "is_config": true
+  },
+  {
+    "source": "dist",
+    "dist_file": "config.default.yaml",
+    "target": "/etc/rapidblock/config.yaml",
+    "is_config": true
+  },
+  {
+    "source": "asset",
+    "asset_type": "executable",
+    "asset_base": "rapidblock",
+    "target": "/opt/rapidblock/bin/rapidblock",
+    "is_executable": true
+  },
+  {
+    "source": "dist",
+    "dist_file": "cron.sh",
+    "target": "/opt/rapidblock/scripts/cron.sh",
+    "is_executable": true
+  },
+  {
+    "source": "dist",
+    "dist_file": "config.example.yaml",
+    "target": "/opt/rapidblock/share/config-example.yaml"
+  },
+  {
+    "source": "dist",
+    "dist_file": "rapidblock_dot_org.pub",
+    "target": "/opt/rapidblock/share/rapidblock-dot-org.pub"
+  },
+  {
+    "source": "asset",
+    "asset_type": "provenance",
+    "asset_base": "rapidblock",
+    "target": "/opt/rapidblock/share/rapidblock.intoto.jsonl"
+  }
+]

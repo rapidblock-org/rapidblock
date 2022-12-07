@@ -1,0 +1,22 @@
+#! /bin/sh
+set -e
+
+if ! getent group mastodon 2>/dev/null ; then
+  addgroup \
+    --quiet \
+    --system \
+    mastodon
+fi
+
+if ! getent passwd mastodon 2>/dev/null ; then
+  adduser \
+    --quiet \
+    --system \
+    --home /var/lib/mastodon \
+    --shell /sbin/nologin \
+    --ingroup mastodon \
+    --disabled-password \
+    --disabled-login \
+    --gecos "Mastodon Server Account" \
+    mastodon
+fi

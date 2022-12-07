@@ -1,29 +1,32 @@
-package main
+package checksum
 
 import (
 	"crypto/sha256"
 	"fmt"
 	"io"
 	"os"
-	"regexp"
 )
 
 const bufferSize = 1 << 20 // 1 MiB
 
-var reSpace = regexp.MustCompile(`\s+`)
-
-func checksumFile(filePath string, isText bool) []byte {
-	file, err := os.OpenFile(filePath, os.O_RDONLY, 0)
+func File(filePath string, isText bool) ([]byte, error) {
+	f, err := os.OpenFile(filePath, os.O_RDONLY, 0)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: failed to open %q: %v\n", filePath, err)
-		os.Exit(1)
+		return nil, fmt.Errorf("failed to open file: %q: %w", filePath, err)
 	}
+
+	needClose := true
+	defer func() {
+		if needClose {
+			_ = f.Close()
+		}
+	}()
 
 	var srcBuf [bufferSize]byte
 	var dstBuf [bufferSize]byte
 	h := sha256.New()
 	for {
-		n, err := file.Read(srcBuf[:])
+		n, err := f.Read(srcBuf[:])
 		isEOF := false
 		switch {
 		case err == nil:
@@ -31,9 +34,7 @@ func checksumFile(filePath string, isText bool) []byte {
 		case err == io.EOF:
 			isEOF = true
 		default:
-			_ = file.Close()
-			fmt.Fprintf(os.Stderr, "fatal: I/O error while reading %q: %v\n", filePath, err)
-			os.Exit(1)
+			return nil, fmt.Errorf("I/O error while reading file: %q: %w", filePath, err)
 		}
 
 		var data []byte
@@ -55,13 +56,13 @@ func checksumFile(filePath string, isText bool) []byte {
 			break
 		}
 	}
-	checksum := h.Sum(nil)
 
-	err = file.Close()
+	needClose = false
+	err = f.Close()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: failed to close %q: %v\n", filePath, err)
-		os.Exit(1)
+		return nil, fmt.Errorf("failed to close file: %q: %w", filePath, err)
 	}
 
-	return checksum
+	checksum := h.Sum(nil)
+	return checksum, nil
 }

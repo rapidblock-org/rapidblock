@@ -1,96 +1,128 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"os"
+	"time"
 
-	getopt "github.com/pborman/getopt/v2"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+
+	"github.com/chronos-tachyon/rapidblock/command"
+	"github.com/chronos-tachyon/rapidblock/command/applycommand"
+	"github.com/chronos-tachyon/rapidblock/command/exportcommand"
+	"github.com/chronos-tachyon/rapidblock/command/helpcommand"
+	"github.com/chronos-tachyon/rapidblock/command/keygencommand"
+	"github.com/chronos-tachyon/rapidblock/command/preparecommand"
+	"github.com/chronos-tachyon/rapidblock/command/registercommand"
+	"github.com/chronos-tachyon/rapidblock/command/signcommand"
+	"github.com/chronos-tachyon/rapidblock/command/verifycommand"
+	"github.com/chronos-tachyon/rapidblock/command/versioncommand"
+	"github.com/chronos-tachyon/rapidblock/internal/appversion"
+
+	_ "github.com/chronos-tachyon/rapidblock/mastodon"
 )
 
 var (
 	Version    = "devel"
-	Commit     = "unknown"
-	CommitDate = "unknown"
-	TreeState  = "unknown"
+	Commit     = ""
+	CommitDate = ""
+	TreeState  = ""
 )
-
-const (
-	PrepareData = "prepare-data"
-	ExportCSV   = "export-csv"
-	GenerateKey = "generate-key"
-	Sign        = "sign"
-	Verify      = "verify"
-	Apply       = "apply"
-
-	AllModes             = PrepareData + ", " + ExportCSV + "," + GenerateKey + ", " + Sign + ", " + Verify + ", " + Apply
-	AllExceptGenerateKey = PrepareData + ", " + ExportCSV + "," + Sign + ", " + Verify + ", " + Apply
-	GenerateSignVerify   = GenerateKey + ", " + Sign + ", " + Verify
-	GenerateSign         = GenerateKey + ", " + Sign
-	SignVerify           = Sign + ", " + Verify
-
-	Mastodon3x = "mastodon-3.x"
-	Mastodon4x = "mastodon-4.x"
-
-	AllSoftware = Mastodon4x + ", " + Mastodon3x
-)
-
-var (
-	flagVersion         bool
-	flagText            bool
-	flagMode            string
-	flagSoftware        string
-	flagAccountDataFile string
-	flagSourceID        string
-	flagCsvFile         string
-	flagDataFile        string
-	flagSigFile         string
-	flagPublicKeyFile   string
-	flagPrivateKeyFile  string
-	flagDatabaseURL     string
-)
-
-func init() {
-	getopt.SetParameters("")
-	getopt.FlagLong(&flagVersion, "version", 'V', "show version information and exit")
-	getopt.FlagLong(&flagText, "text", 't', "["+SignVerify+"] perform newline canonicalization, under the assumption that --data-file is text")
-	getopt.FlagLong(&flagMode, "mode", 'm', "select mode of operation: "+AllModes)
-	getopt.FlagLong(&flagSoftware, "software", 'x', "["+Apply+"] select which server software is in use: "+AllSoftware)
-	getopt.FlagLong(&flagAccountDataFile, "account-data-file", 'A', "["+PrepareData+"] path to the groups.io cookies and database column mappings")
-	getopt.FlagLong(&flagSourceID, "source-id", 'S', "["+PrepareData+"] ID of the Google Sheet spreadsheet to pull data from")
-	getopt.FlagLong(&flagCsvFile, "csv-file", 'c', "["+ExportCSV+"] path to the CSV file to create")
-	getopt.FlagLong(&flagDataFile, "data-file", 'd', "["+AllExceptGenerateKey+"] path to the JSON file to create, export from, sign, verify, or apply")
-	getopt.FlagLong(&flagSigFile, "signature-file", 's', "["+SignVerify+"] path to the base-64 Ed25519 signature file to create or verify")
-	getopt.FlagLong(&flagPublicKeyFile, "public-key-file", 'p', "["+GenerateSignVerify+"] path to the base-64 Ed25519 public key file to verify with")
-	getopt.FlagLong(&flagPrivateKeyFile, "private-key-file", 'k', "["+GenerateSign+"] path to the base-64 Ed25519 private key file to sign with")
-	getopt.FlagLong(&flagDatabaseURL, "database-url", 'D', "["+Apply+"] PostgreSQL database URL to connect to")
-}
 
 func main() {
-	getopt.Parse()
+	appversion.Version = Version
+	appversion.Commit = Commit
+	appversion.CommitDate = CommitDate
+	appversion.TreeState = TreeState
 
-	if flagVersion {
-		fmt.Println(Version)
-		fmt.Println(Commit)
-		fmt.Println(CommitDate)
-		fmt.Println(TreeState)
-		return
-	}
+	dispatcher := command.MakeDispatcher(
+		"rapidblock",
+		helpcommand.Factory,
+		versioncommand.Factory,
+		keygencommand.Factory,
+		preparecommand.Factory,
+		exportcommand.Factory,
+		signcommand.Factory,
+		verifycommand.Factory,
+		registercommand.Factory,
+		applycommand.Factory,
+	)
 
-	switch flagMode {
-	case PrepareData:
-		cmdPrepareData()
-	case ExportCSV:
-		cmdExportCSV()
-	case GenerateKey:
-		cmdGenerateKey()
-	case Sign:
-		cmdSign()
-	case Verify:
-		cmdVerify()
-	case Apply:
-		cmdApply()
+	var logWriter io.Writer
+
+	switch logOutput := os.Getenv("LOG_OUTPUT"); logOutput {
+	case "":
+		fallthrough
+	case "stderr":
+		logWriter = os.Stderr
+	case "stdout":
+		logWriter = os.Stdout
 	default:
-		fmt.Fprintf(os.Stderr, "fatal: unknown value %q for -m / --mode flag, expected one of: %s\n", flagMode, AllModes)
-		os.Exit(1)
+		f, err := os.OpenFile(logOutput, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o666)
+		if err != nil {
+			panic(fmt.Errorf("failed to open log file: %q: %w", logOutput, err))
+		}
+		defer func() {
+			_ = f.Sync()
+			_ = f.Close()
+		}()
+		logWriter = f
 	}
+
+	switch logFormat := os.Getenv("LOG_FORMAT"); logFormat {
+	case "":
+		fallthrough
+	case "console":
+		logWriter = zerolog.ConsoleWriter{
+			Out:        logWriter,
+			TimeFormat: "2006-01-02T15:04:05.999Z07:00",
+		}
+	case "console-plain":
+		logWriter = zerolog.ConsoleWriter{
+			Out:        logWriter,
+			TimeFormat: "2006-01-02T15:04:05.999Z07:00",
+			NoColor:    true,
+		}
+	case "raw":
+		// pass
+	case "cbor":
+		// pass
+	case "json":
+		// pass
+	default:
+		panic(fmt.Errorf("unknown log format %q, must be one of \"console\" or \"json\"", logFormat))
+	}
+
+	switch logLevel := os.Getenv("LOG_LEVEL"); logLevel {
+	case "trace":
+		zerolog.SetGlobalLevel(zerolog.TraceLevel)
+	case "debug":
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	case "":
+		fallthrough
+	case "info":
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	case "warn":
+		fallthrough
+	case "warning":
+		zerolog.SetGlobalLevel(zerolog.WarnLevel)
+	case "err":
+		fallthrough
+	case "error":
+		zerolog.SetGlobalLevel(zerolog.ErrorLevel)
+	default:
+		panic(fmt.Errorf("unknown log level %q, must be one of \"debug\", \"info\", \"warn\", \"error\"", logLevel))
+	}
+
+	log.Logger = zerolog.New(logWriter).With().Timestamp().Logger()
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+	zerolog.DurationFieldUnit = time.Second
+	zerolog.DurationFieldInteger = false
+	zerolog.DefaultContextLogger = &log.Logger
+
+	ctx := context.Background()
+	os.Exit(dispatcher.Main(ctx, os.Args))
 }

@@ -60,14 +60,13 @@ cd "$tmproot"
 curl -fsSLR -o blocklist.json     "$BLOCKLIST_URL"
 curl -fsSLR -o blocklist.json.sig "$SIGNATURE_URL"
 
-rapidblock -m verify \
+rapidblock verify \
   -p "$PUBLIC_KEY_FILE" \
   -d blocklist.json \
   -s blocklist.json.sig \
-  -t >/dev/null
+  -t \
+  >/dev/null
 
-for item in "${INSTANCES[@]}"; do
-  software="${item%%|*}"
-  pgurl="${item#*|}"
-  rapidblock -m apply -d blocklist.json -x "$software" -D "$pgurl"
-done
+rapidblock apply \
+  -c "$APPLY_CONFIG_FILE" \
+  -d blocklist.json

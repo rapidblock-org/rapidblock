@@ -20,6 +20,4 @@ SLEEP_MAX=3600
 BLOCKLIST_URL="https://rapidblock.org/blocklist.json"
 SIGNATURE_URL="https://rapidblock.org/blocklist.json.sig"
 PUBLIC_KEY_FILE="/opt/rapidblock/share/rapidblock-dot-org.pub"
-INSTANCES=( \
-  "mastodon-4.x|postgresql:///mastodon?host=/run/postgresql&port=5433" \
-)
+APPLY_CONFIG_FILE="/etc/rapidblock/config.yaml"
