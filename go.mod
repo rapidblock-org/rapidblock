@@ -3,7 +3,7 @@ module github.com/chronos-tachyon/rapidblock
 go 1.19
 
 require (
-	github.com/jackc/pgx/v5 v5.1.1
+	github.com/jackc/pgx/v5 v5.2.0
 	github.com/pborman/getopt/v2 v2.1.0
 	gopkg.in/yaml.v3 v3.0.1
 )
